@@ -6,6 +6,7 @@ import re
 
 from app.analyzers.common import RepoIndex
 from app.core.errors import AppError
+from app.core.security import redact
 from app.core.settings import Settings
 from app.integrations.model_provider import Chunk, build_provider
 from app.schemas.models import GroundedAnswer
@@ -67,7 +68,9 @@ def _best_window(path: str, lines: list[str], terms: list[str], role: str) -> Ch
     best = max(range(len(hits)), key=lambda idx: hits[idx])
     start = max(0, best - WINDOW_BEFORE)
     end = min(len(lines), best + WINDOW_AFTER + 1)
-    text = "\n".join(lines[start:end]).strip()
+    # Redact secret-shaped content so retrieval never echoes credentials
+    # back through /search or Q&A citations.
+    text = redact("\n".join(lines[start:end]).strip())
     if not text:
         return None
     return Chunk(path=path, start_line=start + 1, end_line=end, text=text, role=role)

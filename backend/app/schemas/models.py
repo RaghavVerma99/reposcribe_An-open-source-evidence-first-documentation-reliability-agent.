@@ -28,6 +28,10 @@ class EvidenceRef(BaseModel):
 class Finding(BaseModel):
     id: str
     check_id: str
+    subject_key: str = Field(
+        description="Stable identifier of the underlying defect: check + path + subject. "
+        "Two findings with the same subject_key describe the same drift."
+    )
     title: str
     summary: str
     status: FindingStatus

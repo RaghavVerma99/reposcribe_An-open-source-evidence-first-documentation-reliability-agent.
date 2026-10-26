@@ -114,6 +114,16 @@ class LocalDemoProvider:
 
 
 def _patch_route(finding: Finding, document: str) -> PatchProposal:
+    """Repair a documented route against the closest discoverable route.
+
+    Rules:
+    - Method and path are only rewritten when the change is unambiguous.
+    - A combined method-and-path change is rejected: it implies two
+      independent claims drifted, and an automated fix would require a
+      human reviewer.
+    - When the closest route is from an unresolved prefix or the path
+      similarity is low, the proposal is also rejected.
+    """
     claim = ROUTE_PAIR_RE.search(finding.documentation_claim or "")
     observed = ROUTE_PAIR_RE.search(finding.observed_fact or "")
     if not claim or not observed:
@@ -124,20 +134,43 @@ def _patch_route(finding: Finding, document: str) -> PatchProposal:
         )
     old_method, old_path = claim.group(1), claim.group(2)
     new_method, new_path = observed.group(1), observed.group(2)
+    path_changed = new_path != old_path
+    method_changed = new_method != old_method
+
+    if not path_changed and not method_changed:
+        raise AppError(
+            "patch_not_available",
+            "The documented route already matches source; no patch is needed.",
+            422,
+        )
+    if method_changed and path_changed:
+        raise AppError(
+            "patch_not_available",
+            "Both the documented method and path differ from source. "
+            "An automated fix would require a human reviewer.",
+            422,
+        )
+    if (new_path != "/" and old_path != "/") and path_changed:
+        ratio = difflib.SequenceMatcher(None, old_path, new_path).ratio()
+        if ratio < 0.4:
+            raise AppError(
+                "patch_not_available",
+                "The closest discovered route is too dissimilar to the documented one for a safe rewrite.",
+                422,
+            )
 
     lines = document.splitlines(keepends=True)
     changed = 0
-    path_changed = new_path != old_path
-    method_changed = new_method != old_method
+    replacements: list[str] = []
     for index, line in enumerate(lines):
-        if old_path not in line:
+        if path_changed and old_path not in line:
             continue
-        if old_method not in line and not method_changed:
+        if method_changed and old_method not in line:
             continue
         updated = line
         if path_changed:
             updated = updated.replace(old_path, new_path)
-        if method_changed and not path_changed:
+        if method_changed:
             updated = re.sub(rf"\b{old_method}\b", new_method, updated, count=1)
         if updated != line:
             lines[index] = updated
@@ -145,10 +178,19 @@ def _patch_route(finding: Finding, document: str) -> PatchProposal:
     if not changed:
         raise AppError("patch_not_available", "The documented route text was not found in the target document.", 422)
 
-    limitations = []
-    if method_changed and path_changed:
-        limitations.append("Both the documented path and method were changed to match the detected route.")
-    rationale = f"Updated the documented {old_method} {old_path} reference to {new_method} {new_path}."
+    if path_changed and method_changed:
+        # Unreachable given the guard above, kept for explicit reasoning.
+        replacements.append("Both the documented path and method were updated to match source.")
+    elif path_changed:
+        replacements.append(f"Updated the documented path from {old_path} to {new_path}.")
+    elif method_changed:
+        replacements.append(f"Updated the documented method from {old_method} to {new_method}.")
+    rationale = " ".join(replacements) or "Updated the documented route to match source."
+    limitations: list[str] = []
+    if "Closest discovered route" in (finding.observed_fact or ""):
+        limitations.append(
+            "Replacement uses the closest discoverable route; review it before applying."
+        )
     return PatchProposal(content="".join(lines), rationale=rationale, limitations=limitations)
 
 

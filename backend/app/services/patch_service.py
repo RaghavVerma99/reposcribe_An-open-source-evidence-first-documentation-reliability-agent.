@@ -40,6 +40,12 @@ class PatchService:
         finding = state.findings.get(finding_id)
         if finding is None:
             raise AppError("finding_not_found", "Finding not found in this repository.", 404)
+        if finding.status in ("dismissed", "resolved"):
+            raise AppError(
+                "patch_not_available",
+                f"This finding is {finding.status}; create a new audit to surface it before patching.",
+                422,
+            )
 
         doc_path = next(
             (item.path for item in finding.evidence if item.role == "documentation"),
@@ -133,7 +139,14 @@ class PatchService:
         else:
             try:
                 result = analyzer.analyze(overridden)
-                still_present = any(item.id == finding.id for item in result.findings)
+                # The same defect can resurface with a different finding id if the
+                # patch changes the subject (e.g. a documented route path). Compare
+                # by subject_key to detect that the underlying drift is still present.
+                still_present = any(
+                    item.check_id == finding.check_id
+                    and item.subject_key == finding.subject_key
+                    for item in result.findings
+                )
                 steps.append(
                     ValidationStep(
                         id="V-3",

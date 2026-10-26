@@ -21,6 +21,7 @@ export interface EvidenceRef {
 export interface Finding {
   id: string;
   check_id: string;
+  subject_key: string;
   title: string;
   summary: string;
   status: FindingStatus;

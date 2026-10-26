@@ -4,8 +4,9 @@ from __future__ import annotations
 
 import difflib
 
-from app.analyzers.common import DocRoute, RepoIndex, Route
-from app.analyzers.factory import AnalyzerResult, doc_evidence, file_evidence, make_finding
+from app.analyzers.common import DocRoute, RepoIndex, Route, read_text
+from app.analyzers.factory import MAX_EXCERPT_CHARS, AnalyzerResult, doc_evidence, file_evidence, make_finding
+from app.schemas.models import EvidenceRef
 
 CHECK_ID = "fastapi.route_matches_docs"
 
@@ -37,9 +38,24 @@ class RouteAnalyzer:
             if (doc_route.method, doc_route.path) in pairs:
                 continue
             doc = index.docs.get(doc_route.doc_path)
-            if doc is None:
+            if doc is not None:
+                evidence = [doc_evidence(doc, doc_route.line)]
+            elif doc_route.doc_path.lower().endswith(("openapi.json", "openapi.yaml", "openapi.yml")):
+                # The route came from an OpenAPI spec that isn't a Markdown file;
+                # attach a synthetic evidence snippet pointing at the spec entry.
+                openapi_text = read_text(index.root / doc_route.doc_path) or ""
+                excerpt = _openapi_route_excerpt(openapi_text, doc_route.path, doc_route.method)
+                evidence = [
+                    EvidenceRef(
+                        path=doc_route.doc_path,
+                        start_line=1,
+                        end_line=1,
+                        excerpt=excerpt[:MAX_EXCERPT_CHARS],
+                        role="documentation",
+                    )
+                ]
+            else:
                 continue
-            evidence = [doc_evidence(doc, doc_route.line)]
 
             if doc_route.path in by_path:
                 routes = by_path[doc_route.path]
@@ -97,6 +113,24 @@ class RouteAnalyzer:
                 )
             )
         return result
+
+
+def _openapi_route_excerpt(text: str, route_path: str, method: str) -> str:
+    """Extract a short excerpt pointing at the matching path entry in an OpenAPI spec."""
+    if not text:
+        return f"{method.upper()} {route_path}"
+    lowered = text.lower()
+    needle = f'"{route_path.lower()}"'
+    idx = lowered.find(needle)
+    if idx < 0:
+        return f"{method.upper()} {route_path}"
+    # Walk back to the nearest preceding newline for a clean start.
+    start = text.rfind("\n", 0, idx) + 1
+    end = lowered.find("\n", idx + len(needle))
+    if end < 0:
+        end = len(text)
+    snippet = text[start:end].strip()
+    return snippet or f"{method.upper()} {route_path}"
 
 
 def _route_evidence(root, route: Route) -> list:

@@ -323,12 +323,20 @@ def extract_doc_routes(doc: DocFile) -> list[DocRoute]:
 
 
 def parse_openapi(path: str, text: str) -> list[DocRoute]:
+    payload: object | None = None
     try:
         payload = json.loads(text)
     except (json.JSONDecodeError, TypeError):
-        return []
+        try:
+            import yaml  # type: ignore[import-not-found]
+
+            payload = yaml.safe_load(text)
+        except Exception:
+            return []
     routes: list[DocRoute] = []
-    paths = payload.get("paths") if isinstance(payload, dict) else None
+    if not isinstance(payload, dict):
+        return routes
+    paths = payload.get("paths")
     if not isinstance(paths, dict):
         return routes
     for route_path, operations in paths.items():
@@ -575,11 +583,25 @@ def build_index(root: Path, doc_overrides: dict[str, str] | None = None) -> Repo
     for doc in docs.values():
         doc_routes.extend(extract_doc_routes(doc))
     openapi_routes: list[DocRoute] = []
-    for rel in list(docs) + [p for p in _all_files(root) if p.lower().endswith(".json")]:
-        if rel.endswith("openapi.json"):
-            text = overrides.get(rel) or read_text(root / rel)
-            if text:
-                openapi_routes.extend(parse_openapi(rel, text))
+    openapi_files: list[str] = []
+    for rel, _absolute, _size in iter_files(root):
+        lowered = rel.lower()
+        if lowered.endswith(("openapi.json", "openapi.yaml", "openapi.yml")):
+            openapi_files.append(rel)
+    # The list above is sorted via iter_files; iterate in that order for determinism.
+    seen_openapi_files: set[str] = set()
+    for rel in list(docs) + openapi_files + [p for p in _all_files(root) if p.lower().endswith((".json", ".yaml", ".yml"))]:
+        lowered = rel.lower()
+        is_openapi = lowered.endswith(("openapi.json", "openapi.yaml", "openapi.yml"))
+        if is_openapi and rel in seen_openapi_files:
+            continue
+        if is_openapi:
+            seen_openapi_files.add(rel)
+        text = overrides.get(rel) or read_text(root / rel)
+        if not text:
+            continue
+        if is_openapi:
+            openapi_routes.extend(parse_openapi(rel, text))
 
     return RepoIndex(
         root=root,

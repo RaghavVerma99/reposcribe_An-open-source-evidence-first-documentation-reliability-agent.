@@ -96,6 +96,7 @@ def test_patch_target_must_be_documentation(sample_state) -> None:
     source_finding = Finding(
         id="fnd_source_target",
         check_id="markdown.internal_link_exists",
+        subject_key="README.md:docs/setup.md",
         title="Source target",
         summary="Evidence points at source code.",
         status="verified",

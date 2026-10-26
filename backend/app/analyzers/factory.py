@@ -78,6 +78,7 @@ def make_finding(
     return Finding(
         id=finding_id(check_id, primary, subject_key),
         check_id=check_id,
+        subject_key=subject_key,
         title=title,
         summary=summary,
         status=status,
