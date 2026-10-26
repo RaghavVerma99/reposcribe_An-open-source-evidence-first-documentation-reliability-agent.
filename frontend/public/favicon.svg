@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="RepoScribe">
+  <rect width="64" height="64" rx="15" fill="#000000" />
+  <rect x="0.75" y="0.75" width="62.5" height="62.5" rx="14.25" fill="none" stroke="#2b2b2b" stroke-width="1.5" />
+  <text x="31" y="43" text-anchor="middle" font-family="Inter, Segoe UI, system-ui, sans-serif" font-size="27" font-weight="800" letter-spacing="-2.5" fill="#f7f7f7">RS</text>
+  <circle cx="51" cy="12" r="5" fill="#22c55e" />
+</svg>

@@ -7,7 +7,13 @@ import re
 import uuid
 from itertools import zip_longest
 
-from app.analyzers.common import DOTTED_RE, PATHLIKE_RE, _resolve_relative, read_text
+from app.analyzers.common import (
+    DOTTED_RE,
+    PATHLIKE_RE,
+    STDLIB_ROOTS,
+    _resolve_relative,
+    read_text,
+)
 from app.analyzers.registry import get_analyzer
 from app.core.errors import AppError
 from app.core.security import contains_secret
@@ -19,10 +25,6 @@ from app.services.store import RepositoryState, utcnow
 MAX_CHANGED_LINES = 40
 ALLOWED_EXACT = {"readme.md", "contributing.md"}
 IGNORED_REF_NAMES = {".env", ".env.local"}
-STDLIB_ROOTS = {
-    "os", "sys", "re", "json", "typing", "pathlib", "datetime", "logging",
-    "asyncio", "fastapi", "pydantic", "uvicorn", "pytest", "httpx",
-}
 
 
 def is_allowed_target(path: str) -> bool:

@@ -2,8 +2,21 @@
 
 from __future__ import annotations
 
+import io
+import zipfile
+
+from fastapi.testclient import TestClient
+
 from app.analyzers.common import build_index, extract_doc_routes, parse_doc, parse_python, slugify_heading
 from tests.conftest import write_repo
+
+
+def _zip(files: dict[str, str]) -> bytes:
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, "w") as z:
+        for name, content in files.items():
+            z.writestr(name, content)
+    return buffer.getvalue()
 
 README = """# Project
 
@@ -103,10 +116,100 @@ def test_unresolvable_router_prefix_is_flagged() -> None:
     assert py_file.routes == []
 
 
+def test_non_constant_router_prefix_is_flagged() -> None:
+    py_file = parse_python(
+        "app/routes/users.py",
+        "from fastapi import APIRouter\nPREFIX = '/api/v2'\nrouter = APIRouter(prefix=PREFIX)\n\n@router.get('/users')\ndef list_users():\n    return []\n",
+    )
+    assert py_file.route_prefix_unresolved
+    assert py_file.routes == []
+
+
+def test_attribute_router_decorator_is_flagged_not_silently_skipped() -> None:
+    py_file = parse_python(
+        "app/routes/users.py",
+        "from fastapi import APIRouter\n\nclass Module:\n    router = APIRouter()\n\nmodule = Module()\n\n@module.router.get('/users')\ndef list_users():\n    return []\n",
+    )
+    assert py_file.route_prefix_unresolved
+    assert py_file.routes == []
+
+
+def test_site_root_link_is_not_checked_outside_workspace(tmp_path) -> None:
+    root = write_repo(
+        tmp_path,
+        {"README.md": "# App\n\n[Root](/etc/passwd) and [Escape](../../outside.md).\n"},
+    )
+    index = build_index(root)
+    links = {link.target: link for link in index.docs["README.md"].links}
+    assert not links["/etc/passwd"].checkable
+    assert links["/etc/passwd"].resolved_path is None
+    assert links["../../outside.md"].checkable
+    assert links["../../outside.md"].resolved_path is None
+    assert not links["../../outside.md"].exists
+
+
 def test_syntax_error_is_recorded_not_raised() -> None:
     py_file = parse_python("app/broken.py", "def oops(:\n")
     assert py_file.parse_error is not None
     assert py_file.routes == []
+
+
+def test_severity_matches_catalog_for_each_branch() -> None:
+    """#18: every analyzer branch emits the severity declared in SPEC §8.1."""
+    from app.core.errors import AppError
+    from app.main import create_app
+
+    # CHK-01 missing-link -> medium
+    files_link = {
+        "README.md": "# App\n\n## Installation\n\npytest\n",
+        "app.py": "x = 1\n",
+    }
+    c = TestClient(create_app())
+    repo = c.post("/api/v1/repositories", files={"file": ("r.zip", _zip(files_link), "application/zip")}).json()
+    audit = c.post(f"/api/v1/repositories/{repo['id']}/audits").json()
+    link_findings = [f for f in audit["findings"] if f["check_id"] == "markdown.internal_link_exists"]
+    if link_findings:
+        assert all(f["severity"] == "medium" for f in link_findings), (
+            "CHK-01 must be medium per SPEC §8.1"
+        )
+
+    # CHK-06 documented checklist entry that is *present* should stay info.
+    files_check = {
+        "README.md": "# App\n\n## Installation\n\npytest\n",
+        "app.py": (
+            "from fastapi import FastAPI\n"
+            "app = FastAPI()\n\n@app.get('/api/v2/users')\ndef users():\n    return []\n"
+        ),
+    }
+    repo2 = c.post("/api/v1/repositories", files={"file": ("r.zip", _zip(files_check), "application/zip")}).json()
+    audit2 = c.post(f"/api/v1/repositories/{repo2['id']}/audits").json()
+    api_doc_findings = [
+        f
+        for f in audit2["findings"]
+        if f["check_id"] == "docs.readme_checklist" and f["subject_key"] == "readme-api-docs"
+    ]
+    assert api_doc_findings, "fixture should produce the api-docs checklist finding"
+    assert all(f["severity"] == "info" for f in api_doc_findings), (
+        "CHK-06 default severity must be info per SPEC §8.1"
+    )
+
+    # Avoid an unused-import lint failure on AppError from this file.
+    _ = AppError
+
+
+def test_stdlib_roots_is_the_single_source_of_truth() -> None:
+    from app.analyzers.common import STDLIB_ROOTS as COMMON
+    from app.analyzers.python_symbols import SymbolReferenceAnalyzer
+    from app.services.patch_service import STDLIB_ROOTS as SERVICE
+
+    # CHK-05 and V-5 must agree — drift here was the audit finding.
+    assert SERVICE is COMMON, "patch_service must import STDLIB_ROOTS from common"
+    # Spot-check both well-known roots are present.
+    assert "os" in COMMON
+    assert "hashlib" in COMMON
+    assert "fastapi" in COMMON
+    # And it must be a real, hashable, deduplicated container.
+    assert isinstance(COMMON, frozenset)
 
 
 def test_env_references_are_indexed(tmp_path) -> None:

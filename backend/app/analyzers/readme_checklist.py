@@ -89,7 +89,7 @@ class ReadmeChecklistAnalyzer:
                     "API routes are defined without documented API reference",
                     "FastAPI routes were discovered, but no documentation lists them.",
                     "needs_review",
-                    "medium",
+                    "info",
                     evidence,
                 )
             )

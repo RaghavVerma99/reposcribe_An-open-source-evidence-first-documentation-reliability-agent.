@@ -157,22 +157,6 @@ export interface ProviderStatus {
   verified_contract: boolean;
 }
 
-export interface HealthResponse {
-  status: "ok" | "degraded";
-  app: string;
-  version: string;
-  workspace_writable: boolean;
-  provider: ProviderStatus;
-}
-
-export interface SearchHit {
-  path: string;
-  start_line: number;
-  end_line: number;
-  excerpt: string;
-  role: string;
-}
-
 export interface ApiErrorBody {
   error: { code: string; message: string; request_id: string; retryable: boolean };
 }

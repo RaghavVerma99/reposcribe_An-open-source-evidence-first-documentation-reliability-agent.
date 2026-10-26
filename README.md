@@ -7,10 +7,11 @@ prepares a minimal Markdown repair that you review, validate, and export.
 **Screenshot / recording:** not committed in this build. Record one locally with the demo script in
 `docs/demo-script.md` before publishing; do not add placeholder media.
 
-**Current status:** MVP (`v0.3.0`) implemented and tested. Model-assisted phrasing runs in a clearly labelled
+**Current status:** MVP source version `0.3.0`, implemented and tested. No git tag exists for this build;
+`0.3.0` is an implementation version, not a published release. Model-assisted phrasing runs in a clearly labelled
 local demo mode. The Alan adapter is present but disabled until the integration contract is verified — see
 [Alan integration](#alan-ai-integration).
-**Open issues and what got into each release** are tracked in [`docs/audit-2026-10.md`](docs/audit-2026-10.md).
+**Open issues and what got into each milestone** are tracked in [`docs/audit-2026-10.md`](docs/audit-2026-10.md).
 `v1.0` is reserved for the milestone defined there (zero High/Medium open, a benchmark with measured numbers).
 
 ---
@@ -46,7 +47,7 @@ contradictions in the documentation you already have.
 - Minimal Markdown patch generation, unified diff, six-step validation, and safe export.
 - Finding lifecycle: verified, needs review, insufficient evidence, resolved after a rescan, dismissed.
 - Provider interface with an honest local demo provider, plus an Alan adapter that refuses to pretend.
-- 63 backend tests across unit, integration, and security suites.
+- 94 backend tests across unit, integration, and security suites.
 
 **Planned**
 
@@ -130,9 +131,11 @@ built UI from `frontend/dist` at `/`.
 
 ## Environment
 
-Copy `.env.example` to `.env`. `.env` is gitignored and is never indexed, read for values, or sent anywhere.
-Configuration lives in `backend/app/core/settings.py`; secrets are backend-only and are never exposed through a
-`VITE_` variable.
+Use `.env.example` as the checklist of supported configuration variables. This build reads values from the
+process environment; it does **not** auto-load a `.env` file. Export the variables in your shell (or through your
+process manager) before starting uvicorn. `.env` is gitignored and is never indexed, read for values, or sent
+anywhere. Configuration lives in `backend/app/core/settings.py`; secrets are backend-only and are never exposed
+through a `VITE_` variable.
 
 ## Tests
 
@@ -147,17 +150,21 @@ npm run typecheck
 npm run build
 ```
 
-Last observed run in this build: `63 passed` (backend), `tsc --noEmit` and `vite build` clean (frontend).
+Last observed run in this build: `94 passed` (backend), `tsc --noEmit` and `vite build` clean (frontend), and
+39/39 checks passing in a headless Chromium pass covering route titles, fonts, overflow, keyboard focus, the
+finding lifecycle, URL filter state, and network isolation.
 
 ## Sample repository walkthrough
 
 The bundled sample lives in `backend/app/data/sample_repo` and intentionally contains drift:
 
 1. Open the app and choose **Try sample repository**.
-2. Run the audit. Expect 10 findings: four verified route mismatches (README and `docs/api.md` document
-   `GET/POST /api/users` and `DELETE /api/users/{user_id}` while the source defines `/api/v2/users`), one broken
-   internal link (`docs/setup.md`), one missing file reference (`scripts/seed.py`), two undocumented environment
-   variables (`REDIS_URL`), one undocumented symbol, and one README checklist suggestion.
+2. Run the audit. Expect 10 findings: six verified route/file defects and four `needs_review` suggestions.
+   The verified set is four route mismatches (README and `docs/api.md` document `GET/POST /api/users` and
+   `DELETE /api/users/{user_id}` while the source defines `/api/v2/users`), one broken internal link
+   (`docs/setup.md`), and one missing file reference (`scripts/seed.py`). The `needs_review` set is two mentions of
+   an undocumented environment variable (`REDIS_URL`), one undocumented symbol
+   (`app.settings.load_settings_legacy`), and one README checklist finding (`LICENSE` is missing from the sample).
 3. Open a route finding. The inspector shows the README table row, the `APIRouter(prefix="/api/v2")` line, and
    the decorator, all with line numbers.
 4. Choose **Generate fix**, then **Validate patch**. Validation reruns the check that produced the finding,
@@ -171,8 +178,8 @@ timing figures are published here.** Product claims must not precede measured nu
 
 ## Security and privacy
 
-- Repository contents stay inside the local workspace. Nothing is uploaded anywhere in this build, because no
-  live model provider is configured.
+- Repository contents are processed locally and are not sent to any third party in this build; no live model
+  provider is configured.
 - If a live provider is enabled later, only bounded evidence excerpts would be sent, and the README must say so
   before the feature ships.
 - `.env`, key files, and credential files are excluded from indexing and never sent to a model.
@@ -187,7 +194,8 @@ A categorized list of open audit findings, with severities and where to fix them
 
 - Python and FastAPI only, and only statically resolvable decorator routes. Dynamic registration is reported as
   inconclusive rather than absent, never as missing.
-- Route, symbol, and configuration checks are deliberately conservative and default to `needs_review`.
+- Route findings are `verified` when the router prefix resolves statically; a prefix that cannot be resolved makes
+  them `insufficient_evidence` with a limitation. Symbol and configuration findings default to `needs_review`.
 - Automatic patch generation is implemented for route, internal-link, and symbol findings. Other findings need a
   human.
 - Audit state is in memory per session; restarting the backend clears it.

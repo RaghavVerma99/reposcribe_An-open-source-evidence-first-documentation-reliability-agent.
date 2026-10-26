@@ -12,7 +12,7 @@ from app.integrations.model_provider import provider_status
 from app.schemas.models import HealthResponse, ProviderStatus
 
 router = APIRouter(tags=["health"])
-VERSION = "0.2.0"
+VERSION = "0.3.0"
 
 # Background-up probe: the workspace may not be writable, but that does not
 # change between requests within a single process lifetime. Cache once.

@@ -41,5 +41,5 @@ Target: about two minutes, no dead ends, every number coming from a real run.
 ## If something fails live
 
 - Provider errors: deterministic checks still work — say so, and show the provider state in Settings.
-- Audit looks empty: open **Scan limitations** and explain which files or checks were skipped, and why.
+- Audit looks empty: open **Limitations** and explain which files or checks were skipped, and why.
 - Never claim a run passed that you did not see pass.

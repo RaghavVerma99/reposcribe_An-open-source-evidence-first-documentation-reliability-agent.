@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, File, Form, Request, Response, UploadFil
 
 from app.api.deps import get_app_settings, get_store, repo_or_404, session_id
 from app.core.errors import AppError
+from app.core.security import MB
 from app.core.settings import Settings
 from app.schemas.models import Repository, RepositoryOverview, SearchHit, SearchResponse
 from app.services.question_service import retrieve
@@ -14,9 +15,27 @@ from app.services.store import Store
 
 router = APIRouter(prefix="/repositories", tags=["repositories"])
 
+UPLOAD_CHUNK_BYTES = 64 * 1024
+
 
 def _service(settings: Settings, store: Store) -> RepositoryService:
     return RepositoryService(settings, store)
+
+
+async def _read_upload_limited(upload: UploadFile, limit_bytes: int) -> bytes:
+    """Read an upload in bounded chunks and fail before buffering past the cap."""
+    chunks: list[bytes] = []
+    total = 0
+    while chunk := await upload.read(UPLOAD_CHUNK_BYTES):
+        total += len(chunk)
+        if total > limit_bytes:
+            raise AppError(
+                "payload_too_large",
+                f"Upload exceeds the {limit_bytes // MB} MB limit.",
+                413,
+            )
+        chunks.append(chunk)
+    return b"".join(chunks)
 
 
 @router.post("", response_model=Repository, status_code=201)
@@ -30,13 +49,7 @@ async def create_repository(
 ) -> Repository:
     service = _service(settings, store)
     if file is not None:
-        data = await file.read()
-        if len(data) > settings.max_upload_mb * 1024 * 1024:
-            raise AppError(
-                "payload_too_large",
-                f"Upload exceeds the {settings.max_upload_mb} MB limit.",
-                413,
-            )
+        data = await _read_upload_limited(file, settings.max_upload_mb * MB)
         state = service.create_from_upload(sid, file.filename or "upload.zip", data)
     elif sample_id:
         state = service.create_from_sample(sid, sample_id)

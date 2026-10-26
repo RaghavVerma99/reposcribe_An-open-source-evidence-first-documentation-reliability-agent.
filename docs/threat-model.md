@@ -1,6 +1,6 @@
 # Threat model
 
-The repository under analysis is untrusted input. Every control below is implemented in the shipped build and
+The repository under analysis is untrusted input. Every control below is implemented in the current build and
 covered by a test unless noted.
 
 ## Threats and controls

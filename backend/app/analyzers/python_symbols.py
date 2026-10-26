@@ -2,17 +2,10 @@
 
 from __future__ import annotations
 
-from app.analyzers.common import DOTTED_RE, PATHLIKE_RE, RepoIndex
+from app.analyzers.common import DOTTED_RE, PATHLIKE_RE, RepoIndex, STDLIB_ROOTS
 from app.analyzers.factory import AnalyzerResult, doc_evidence, make_finding
 
 CHECK_ID = "python.public_symbol_referenced"
-
-STDLIB_ROOTS = {
-    "os", "sys", "re", "json", "typing", "pathlib", "datetime", "logging",
-    "asyncio", "subprocess", "shutil", "zipfile", "ast", "difflib", "hashlib",
-    "fastapi", "pydantic", "uvicorn", "pytest", "httpx", "sqlite3", "contextlib",
-    "collections", "functools", "itertools", "math", "time", "uuid", "secrets",
-}
 
 
 class SymbolReferenceAnalyzer:

@@ -2,17 +2,47 @@
 
 Deliberately conservative: placeholders, globs, generated paths, and shell
 commands are not reported.
+
+Instructional verbs (``Create``, ``Add``, ``Write``, ``Make``, ``Run``) before a
+path reference very often describe a file the reader will create themselves.
+We skip those spans unless the document explicitly says it is documenting an
+existing project (e.g. on the same line, an adjective like ``existing``,
+``current``, ``configured``).
 """
 
 from __future__ import annotations
 
+import re
+
 from app.analyzers.common import PATHLIKE_RE, RepoIndex, _resolve_relative
 from app.analyzers.factory import AnalyzerResult, doc_evidence, make_finding
+from app.core.security import is_within
 
 CHECK_ID = "docs.file_reference_exists"
 
 IGNORED_NAMES = {".env", ".env.local", ".env.development", ".env.production"}
 SKIP_PREFIXES = ("http://", "https://", "$", "~", "<", ">", "/", "./~")
+INSTRUCTIONAL_VERBS = re.compile(
+    r"\b(?:create|creates|created|creating|add|adds|added|adding|write|writes|wrote|writing|"
+    r"make|makes|made|making|run|runs|ran|running|generate|generates|created)\b",
+    re.IGNORECASE,
+)
+EXISTING_HINTS = re.compile(
+    r"\b(?:existing|current|currently|configured|installed|present|actual|"
+    r"already)\b",
+    re.IGNORECASE,
+)
+
+
+def _instructional_context(window_text: str) -> bool:
+    """True if the surrounding text clearly tells the reader to create the file."""
+    if not window_text:
+        return False
+    if EXISTING_HINTS.search(window_text):
+        return False  # the doc frames the path as already existing
+    if INSTRUCTIONAL_VERBS.search(window_text):
+        return True
+    return False
 
 
 class FileReferenceAnalyzer:
@@ -21,6 +51,8 @@ class FileReferenceAnalyzer:
     limitations = [
         "Only inline-code path references with a known file extension are checked.",
         "Globs, template variables, generated files and absolute paths are not evaluated.",
+        "Spans preceded by instructional verbs ('Create <file>', 'Run <cmd>', etc.) are not reported — "
+        "these describe files the reader will create, not files the doc is trying to document.",
     ]
 
     def analyze(self, index: RepoIndex) -> AnalyzerResult:
@@ -36,10 +68,18 @@ class FileReferenceAnalyzer:
                     continue
                 if not PATHLIKE_RE.match(token):
                     continue
+                # Decide whether the doc is asking the reader to create this file or
+                # document an existing one. Same-line context is the strongest signal.
+                line_text = doc.lines[span.line - 1] if 0 < span.line <= len(doc.lines) else ""
+                prev_text = doc.lines[span.line - 2] if span.line - 2 >= 0 else ""
+                window = f"{prev_text} {line_text}".strip()
+                if _instructional_context(window):
+                    continue
                 resolved = _resolve_relative(doc.path, token)
                 if resolved is None or resolved in seen or resolved in link_targets:
                     continue
-                if (index.root / resolved).exists():
+                absolute = index.root / resolved
+                if is_within(index.root, absolute) and absolute.exists():
                     continue
                 seen.add(resolved)
                 result.findings.append(

@@ -10,6 +10,7 @@ interface Props {
   placeholder?: string;
   value?: string;
   onChange?: (value: string) => void;
+  onSubmit?: (value: string) => void;
   className?: string;
 }
 
@@ -18,13 +19,15 @@ function isMac() {
   return /Mac|iPhone|iPad/.test(navigator.platform);
 }
 
-/** A global search field styled like the reference. ⌘K / Ctrl K to focus. */
+/** A global findings search. ⌘K / Ctrl K focuses it; Enter opens matching findings. */
 const GlobalSearch = forwardRef<GlobalSearchHandle, Props>(function GlobalSearch(
-  { placeholder = "Search repositories…", value, onChange, className },
+  { placeholder = "Search findings…", value, onChange, onSubmit, className },
   ref,
 ) {
   const inputRef = useRef<HTMLInputElement | null>(null);
+  const [internalValue, setInternalValue] = useState("");
   const [shortcut, setShortcut] = useState("Ctrl K");
+  const currentValue = value ?? internalValue;
 
   useImperativeHandle(
     ref,
@@ -46,26 +49,54 @@ const GlobalSearch = forwardRef<GlobalSearchHandle, Props>(function GlobalSearch
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
+  function update(next: string) {
+    if (value === undefined) setInternalValue(next);
+    onChange?.(next);
+  }
+
+  function submit() {
+    const query = currentValue.trim();
+    if (query) onSubmit?.(query);
+  }
+
   return (
     <label
       className={cn(
-        "flex h-9 flex-1 items-center gap-2 rounded-full border border-line bg-surface px-3.5 text-[13px] text-ink transition-colors focus-within:border-line-strong hover:border-line-strong",
+        "group flex h-9 w-full items-center gap-2 rounded-full border border-line bg-surface/60 px-3.5 text-[13px] text-ink transition-colors duration-150 focus-within:border-accent/45 focus-within:bg-surface hover:border-line-strong",
         className,
       )}
     >
-      <svg viewBox="0 0 16 16" className="h-3.5 w-3.5 text-ink-faint" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true">
+      <svg
+        viewBox="0 0 16 16"
+        className="h-3.5 w-3.5 shrink-0 text-ink-faint transition-colors group-focus-within:text-accent-strong"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.6"
+        aria-hidden="true"
+      >
         <circle cx="7" cy="7" r="4.5" />
         <path d="m10 10 3.5 3.5" />
       </svg>
       <input
         ref={inputRef}
         type="search"
-        value={value}
-        onChange={(event) => onChange?.(event.target.value)}
+        value={currentValue}
+        onChange={(event) => update(event.target.value)}
+        onKeyDown={(event) => {
+          if (event.key === "Enter") {
+            event.preventDefault();
+            submit();
+          }
+          if (event.key === "Escape") {
+            update("");
+            inputRef.current?.blur();
+          }
+        }}
         placeholder={placeholder}
-        className="flex-1 bg-transparent text-[13px] text-ink placeholder:text-ink-faint focus:outline-none"
+        aria-label={placeholder}
+        className="min-w-0 flex-1 bg-transparent text-[13px] text-ink placeholder:text-ink-faint focus:outline-none"
       />
-      <kbd className="hidden h-5 select-none items-center rounded border border-line bg-subtle px-1.5 font-mono text-2xs text-ink-faint sm:inline-flex">
+      <kbd className="hidden h-5 select-none items-center rounded border border-line bg-subtle px-1.5 font-mono text-[10px] text-ink-faint sm:inline-flex">
         {shortcut}
       </kbd>
     </label>

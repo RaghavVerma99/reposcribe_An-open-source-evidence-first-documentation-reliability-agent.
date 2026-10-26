@@ -35,6 +35,7 @@ class RepositoryState:
     patch_dir: Path
     created_at: datetime
     status: RepoStatus = "created"
+    last_accessed_at: datetime = field(default_factory=utcnow)
     manifest: list[ManifestEntry] = field(default_factory=list)
     index: RepoIndex | None = None
     indexed_at: datetime | None = None
@@ -43,7 +44,15 @@ class RepositoryState:
     patches: dict[str, PatchDraft] = field(default_factory=dict)
     validations: dict[str, ValidationResult] = field(default_factory=dict)
     dismissed: set[str] = field(default_factory=set)
-    limitations: list[str] = field(default_factory=list)
+    # One audit at a time per repository; the API returns 409 rather than
+    # interleaving two result sets over the same mutable state.
+    audit_lock: threading.Lock = field(default_factory=threading.Lock, repr=False, compare=False)
+    # Issues surfaced during indexing (e.g. files that could not be parsed or read).
+    # Populated by repository_service.reindex. Never overwritten by an audit.
+    scan_limitations: list[str] = field(default_factory=list)
+    # Issues surfaced by the analyzers (check scope caveats + per-analyzer skipped files).
+    # Populated by AuditService.run. Reset on each audit.
+    check_limitations: list[str] = field(default_factory=list)
 
 
 class Store:
@@ -54,6 +63,7 @@ class Store:
 
     def register(self, state: RepositoryState) -> None:
         with self._lock:
+            state.last_accessed_at = utcnow()
             self._repos[state.id] = state
 
     def get(self, repository_id: str, session_id: str | None = None) -> RepositoryState | None:
@@ -64,6 +74,7 @@ class Store:
                 return None
             if session_id is not None and state.session_id != session_id:
                 return None
+            state.last_accessed_at = utcnow()
             return state
 
     def remove(self, repository_id: str) -> bool:
@@ -81,7 +92,11 @@ class Store:
     def _sweep_locked(self) -> None:
         ttl = timedelta(minutes=self._settings.workspace_ttl_minutes)
         cutoff = utcnow() - ttl
-        expired = [key for key, state in self._repos.items() if state.created_at < cutoff]
+        expired = [
+            key
+            for key, state in self._repos.items()
+            if state.last_accessed_at < cutoff
+        ]
         for key in expired:
             state = self._repos.pop(key)
             shutil.rmtree(state.workspace, ignore_errors=True)

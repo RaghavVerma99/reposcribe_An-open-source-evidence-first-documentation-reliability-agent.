@@ -50,8 +50,6 @@ class ManifestEntry(BaseModel):
     size: int
     language: str
     is_doc: bool
-    secret: bool = False
-    sha256: str
 
 
 class Repository(BaseModel):

@@ -22,6 +22,18 @@ CHECK_LABELS = {
 
 class AuditService:
     def run(self, state: RepositoryState, check_ids: list[str] | None = None) -> AuditRun:
+        if not state.audit_lock.acquire(blocking=False):
+            raise AppError(
+                "audit_in_progress",
+                "An audit is already running for this repository.",
+                409,
+            )
+        try:
+            return self._run(state, check_ids)
+        finally:
+            state.audit_lock.release()
+
+    def _run(self, state: RepositoryState, check_ids: list[str] | None = None) -> AuditRun:
         if state.index is None:
             raise AppError("internal_error", "Repository has not been indexed.", 500)
 
@@ -56,8 +68,15 @@ class AuditService:
                     finding = finding.model_copy(update={"status": "dismissed"})
                 findings[finding.id] = finding
 
+        # A finding can only be marked resolved by a check that actually ran.
+        # During a partial audit (or when an analyzer fails), findings from
+        # checks outside that scope keep their previous status.
+        rerun_checks = set(checks_run)
         for finding_id, previous_finding in previous.items():
             if finding_id in findings:
+                continue
+            if previous_finding.check_id not in rerun_checks:
+                findings[finding_id] = previous_finding
                 continue
             if previous_finding.status in ("resolved", "dismissed"):
                 findings[finding_id] = previous_finding
@@ -86,7 +105,7 @@ class AuditService:
         state.audits[run.id] = run
         state.findings = findings
         deduped = list(dict.fromkeys(limitations))
-        state.limitations = deduped[:200]
+        state.check_limitations = deduped[:200]
         return run
 
     def get_finding(self, state: RepositoryState, finding_id: str) -> Finding:

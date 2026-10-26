@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import io
+import zipfile
+
 import pytest
 
 from app.core.errors import AppError
@@ -161,3 +164,126 @@ def test_resolved_findings_are_reported(sample_state) -> None:
     resolved = next(finding for finding in rerun.findings if finding.id == link_finding.id)
     assert resolved.status == "resolved"
     assert rerun.summary.resolved >= 1
+
+
+def test_scan_limitations_survive_audit_run() -> None:
+    """#10: the first audit must not erase parse-skip limitations reported
+    during the index step. Before the split, the audit service overwrote
+    ``state.limitations`` with check caveats, dropping the scan-skipped list."""
+    from fastapi.testclient import TestClient
+
+    from app.main import create_app
+
+    payload = _zip_with_broken_python()
+    c = TestClient(create_app())
+    repo = c.post(
+        "/api/v1/repositories", files={"file": ("r.zip", payload, "application/zip")}
+    ).json()
+    overview_before = c.get(f"/api/v1/repositories/{repo['id']}/overview").json()
+    parse_skips_before = [
+        l for l in overview_before["limitations"] if "app/main.py" in l
+    ]
+    assert parse_skips_before, "scan limitation must be present immediately after indexing"
+
+    c.post(f"/api/v1/repositories/{repo['id']}/audits")
+    overview_after = c.get(f"/api/v1/repositories/{repo['id']}/overview").json()
+    parse_skips_after = [
+        l for l in overview_after["limitations"] if "app/main.py" in l
+    ]
+    assert parse_skips_after, (
+        "scan limitation must still be present after the audit runs "
+        "(this was the regression that the limitations split fixes)"
+    )
+
+
+def _zip_with_broken_python() -> bytes:
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w") as z:
+        z.writestr("README.md", "# App\n\n## Installation\n\npytest\n")
+        z.writestr("app/main.py", "def broken(:\n")
+    return buf.getvalue()
+
+
+def test_chk02_skips_instructional_paths_but_flags_real_gaps() -> None:
+    """#7: CHK-02 must not fire on lines like 'Create `myapp.py`', and must
+    still fire when the doc describes an existing-but-missing file."""
+    import io
+    import zipfile
+
+    from fastapi.testclient import TestClient
+
+    from app.main import create_app
+
+    def zip_of(files: dict[str, str]) -> bytes:
+        buffer = io.BytesIO()
+        with zipfile.ZipFile(buffer, "w") as z:
+            for n, t in files.items():
+                z.writestr(n, t)
+        return buffer.getvalue()
+
+    test_client = TestClient(create_app())
+
+    # Case A — instructional path on a clean repo must NOT fire.
+    files_clean = {
+        "README.md": (
+            "# App\n\n"
+            "## Installation\n\n"
+            "Run `pytest`. Create `myapp.py` and add the following:\n\n"
+            "```python\nprint('hello')\n```\n"
+        ),
+        "app.py": "x = 1\n",
+    }
+    repo_a = test_client.post(
+        "/api/v1/repositories", files={"file": ("a.zip", zip_of(files_clean), "application/zip")}
+    ).json()
+    audit_a = test_client.post(f"/api/v1/repositories/{repo_a['id']}/audits").json()
+    instructional_findings = [
+        f for f in audit_a["findings"] if f["check_id"] == "docs.file_reference_exists"
+    ]
+    assert instructional_findings == [], (
+        "CHK-02 must skip 'Create `myapp.py`' — it is asking the reader to author the file"
+    )
+
+    # Case B — doc says the file is "existing" but it's missing -> MUST fire.
+    files_existing = {
+        "README.md": (
+            "# App\n\n"
+            "## Configuration\n\n"
+            "The existing `scripts/seed.py` is loaded automatically. "
+            "The current `config/loading.py` registers the parser.\n"
+        ),
+        "app.py": "x = 1\n",
+    }
+    repo_b = test_client.post(
+        "/api/v1/repositories", files={"file": ("b.zip", zip_of(files_existing), "application/zip")}
+    ).json()
+    audit_b = test_client.post(f"/api/v1/repositories/{repo_b['id']}/audits").json()
+    missing_findings = [
+        f
+        for f in audit_b["findings"]
+        if f["check_id"] == "docs.file_reference_exists" and f["status"] == "verified"
+    ]
+    assert missing_findings, "CHK-02 must still fire when the doc describes the file as existing"
+
+    # Case C — the word "repository" alone must not suppress a real gap.
+    files_repository = {
+        "README.md": (
+            "# App\n\n"
+            "## Setup\n\n"
+            "This repository's setup notes call `scripts/seed.py`.\n"
+        ),
+        "app.py": "x = 1\n",
+    }
+    repo_c = test_client.post(
+        "/api/v1/repositories",
+        files={"file": ("c.zip", zip_of(files_repository), "application/zip")},
+    ).json()
+    audit_c = test_client.post(f"/api/v1/repositories/{repo_c['id']}/audits").json()
+    repository_word_findings = [
+        f
+        for f in audit_c["findings"]
+        if f["check_id"] == "docs.file_reference_exists" and f["status"] == "verified"
+    ]
+    assert repository_word_findings, (
+        "CHK-02 must not treat the noun 'repository' as proof that a missing file exists"
+    )

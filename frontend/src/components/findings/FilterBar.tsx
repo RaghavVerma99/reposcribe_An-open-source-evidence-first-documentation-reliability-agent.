@@ -8,8 +8,9 @@ export interface FindingFilters {
 }
 
 const FIELD =
-  "mt-1 h-8 w-full rounded-control border border-line bg-subtle px-2.5 text-[13px] text-ink transition-colors placeholder:text-ink-faint hover:border-line-strong focus:border-accent/70";
-const LABEL = "block text-2xs font-medium uppercase tracking-[0.08em] text-ink-faint";
+  "mt-1.5 h-9 w-full rounded-control border border-line bg-surface px-3 text-[13px] text-ink transition-colors placeholder:text-ink-faint hover:border-line-strong focus:border-accent/45 focus:bg-surface-elevated";
+const LABEL =
+  "block font-mono text-[10px] font-medium uppercase tracking-[0.12em] text-ink-faint";
 
 export default function FilterBar({
   filters,
@@ -24,9 +25,11 @@ export default function FilterBar({
     onChange({ ...filters, ...patch });
   }
 
+  const hasFilters = Boolean(filters.status || filters.severity || filters.checkId || filters.q);
+
   return (
-    <div className="flex flex-wrap items-end gap-3 border-b border-line bg-canvas px-6 py-4">
-      <div className="min-w-[220px] flex-1">
+    <div className="grid gap-3 border-b border-line bg-canvas/90 px-4 py-4 backdrop-blur-xl sm:grid-cols-2 sm:px-6 lg:sticky lg:top-14 lg:z-20 lg:grid-cols-[minmax(200px,1fr)_150px_140px_180px_auto] lg:items-end lg:px-8">
+      <div>
         <label htmlFor="finding-search" className={LABEL}>
           Search
         </label>
@@ -41,7 +44,7 @@ export default function FilterBar({
         />
       </div>
 
-      <div className="min-w-[130px]">
+      <div>
         <label htmlFor="filter-status" className={LABEL}>
           Status
         </label>
@@ -60,7 +63,7 @@ export default function FilterBar({
         </select>
       </div>
 
-      <div className="min-w-[110px]">
+      <div>
         <label htmlFor="filter-severity" className={LABEL}>
           Severity
         </label>
@@ -78,7 +81,7 @@ export default function FilterBar({
         </select>
       </div>
 
-      <div className="min-w-[150px]">
+      <div>
         <label htmlFor="filter-check" className={LABEL}>
           Check
         </label>
@@ -97,9 +100,21 @@ export default function FilterBar({
         </select>
       </div>
 
-      <p className="pb-2 text-2xs text-ink-faint">
-        <span className="font-mono text-ink-muted">{total}</span> finding{total === 1 ? "" : "s"}
-      </p>
+      <div className="flex items-center justify-between gap-3 lg:justify-end lg:pb-1.5">
+        <p className="text-2xs text-ink-faint">
+          <span className="font-mono text-ink-muted">{total}</span> finding
+          {total === 1 ? "" : "s"}
+        </p>
+        {hasFilters ? (
+          <button
+            type="button"
+            onClick={() => onChange({ status: "", severity: "", checkId: "", q: "" })}
+            className="inline-flex h-7 items-center rounded-full border border-line px-2.5 text-[11px] font-medium text-ink-muted transition-colors hover:border-line-strong hover:text-ink"
+          >
+            Clear
+          </button>
+        ) : null}
+      </div>
     </div>
   );
 }

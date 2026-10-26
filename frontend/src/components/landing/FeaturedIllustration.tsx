@@ -1,149 +1,134 @@
-/** A stylised, SVG-rendered floating card stack with annotation tags.
- * Replaces the 3D isometric artwork of the reference so we keep the same
- * visual rhythm (depth, glowing tags, indigo-violet stage) without raster art.
+import { Badge } from "../ui/Primitives";
+
+/**
+ * A labelled, illustrative finding. It mirrors the fields the real product
+ * shows — claim, observation, evidence, and reviewer action — without
+ * pretending to be live analysis output from someone's repository.
  */
 export default function FeaturedIllustration() {
   return (
-    <div className="relative aspect-[5/4] w-full">
-      <svg
-        viewBox="0 0 500 400"
-        className="absolute inset-0 h-full w-full"
+    <div className="relative">
+      <div
         aria-hidden="true"
-      >
-        <defs>
-          <radialGradient id="stage" cx="50%" cy="55%" r="48%">
-            <stop offset="0%" stopColor="#6366f1" stopOpacity="0.45" />
-            <stop offset="60%" stopColor="#8b5cf6" stopOpacity="0.18" />
-            <stop offset="100%" stopColor="#0a0c1a" stopOpacity="0" />
-          </radialGradient>
-          <linearGradient id="cardGrad" x1="0%" y1="0%" x2="0%" y2="100%">
-            <stop offset="0%" stopColor="#1c2046" />
-            <stop offset="100%" stopColor="#101229" />
-          </linearGradient>
-          <filter id="glow" x="-30%" y="-30%" width="160%" height="160%">
-            <feGaussianBlur stdDeviation="6" result="blur" />
-            <feMerge>
-              <feMergeNode in="blur" />
-              <feMergeNode in="SourceGraphic" />
-            </feMerge>
-          </filter>
-        </defs>
+        className="pointer-events-none absolute -inset-x-8 -top-12 h-44 rounded-full bg-accent/[0.055] blur-3xl"
+      />
+      <div className="relative overflow-hidden rounded-2xl border border-line bg-surface shadow-lift">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line px-5 py-3.5">
+          <div className="flex items-center gap-2.5">
+            <span aria-hidden="true" className="flex items-center gap-1.5">
+              <span className="h-2 w-2 rounded-full bg-[#ff5f56]" />
+              <span className="h-2 w-2 rounded-full bg-[#ffbd2e]" />
+              <span className="h-2 w-2 rounded-full bg-[#27c93f]" />
+            </span>
+            <span className="ml-1 font-mono text-[10.5px] uppercase tracking-[0.14em] text-ink-faint">
+              audit / specimen
+            </span>
+          </div>
+          <Badge tone="warn">
+            <span aria-hidden="true" className="h-1 w-1 rounded-full bg-warn" />
+            needs review
+          </Badge>
+        </div>
 
-        <rect x="0" y="0" width="500" height="400" fill="url(#stage)" />
+        <div className="grid sm:grid-cols-[1.05fr_0.95fr]">
+          <div className="space-y-5 border-b border-line p-5 sm:border-b-0 sm:border-r">
+            <div>
+              <p className="eyebrow">Documentation claims</p>
+              <p className="mt-2 rounded-control border border-line bg-canvas px-3 py-2 font-mono text-[12.5px] text-ink">
+                GET /v1/projects
+              </p>
+            </div>
+            <div>
+              <p className="eyebrow">Source observes</p>
+              <p className="mt-2 rounded-control border border-warn/20 bg-warn-soft/50 px-3 py-2 font-mono text-[12.5px] text-warn">
+                GET /api/v1/projects
+              </p>
+            </div>
+            <div className="rounded-control border border-line bg-canvas p-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <span className="font-mono text-2xs text-ink-faint">src/routes/projects.py:42</span>
+                <span className="inline-flex items-center gap-1 font-mono text-[10px] uppercase tracking-[0.1em] text-ok">
+                  <svg
+                    viewBox="0 0 16 16"
+                    className="h-3 w-3"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.7"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    aria-hidden="true"
+                  >
+                    <path d="M3 8.5 6.5 12 13 4.5" />
+                  </svg>
+                  retrieved
+                </span>
+              </div>
+              <pre className="mt-2.5 overflow-x-auto font-mono text-[11.5px] leading-5 text-ink-muted">
+                {`@router.get("/projects")`}
+              </pre>
+            </div>
+          </div>
 
-        {/* Floating card 1 — back */}
-        <g transform="translate(220 60) rotate(-8)" filter="url(#glow)">
-          <rect width="190" height="120" rx="14" fill="url(#cardGrad)" stroke="#2d3470" strokeWidth="1" />
-          <rect x="14" y="14" width="140" height="6" rx="3" fill="#7c7ff5" opacity="0.8" />
-          <rect x="14" y="28" width="100" height="4" rx="2" fill="#2d3470" />
-          {Array.from({ length: 6 }).map((_, idx) => (
-            <rect
-              key={idx}
-              x="14"
-              y={42 + idx * 10}
-              width={120 - idx * 6}
-              height="3"
-              rx="1.5"
-              fill={idx % 2 === 0 ? "#1f2444" : "#2d3470"}
-            />
-          ))}
-        </g>
+          <div className="flex flex-col p-5">
+            <p className="eyebrow">Reviewer view</p>
+            <ul className="mt-4 space-y-3.5 text-[12.5px] leading-5 text-ink-muted">
+              {[
+                "Claim and source, side by side.",
+                "A real file excerpt behind the finding.",
+                "A patch draft — never an automatic edit.",
+              ].map((line) => (
+                <li key={line} className="flex gap-2.5">
+                  <svg
+                    viewBox="0 0 16 16"
+                    className="mt-0.5 h-3.5 w-3.5 shrink-0 text-accent-strong"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.7"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    aria-hidden="true"
+                  >
+                    <path d="M3 8.5 6.5 12 13 4.5" />
+                  </svg>
+                  <span>{line}</span>
+                </li>
+              ))}
+            </ul>
 
-        {/* Floating card 2 — middle */}
-        <g transform="translate(150 130) rotate(4)" filter="url(#glow)">
-          <rect width="200" height="120" rx="14" fill="url(#cardGrad)" stroke="#2d3470" strokeWidth="1" />
-          <rect x="14" y="14" width="60" height="6" rx="3" fill="#22d3ee" opacity="0.85" />
-          <rect x="14" y="28" width="120" height="4" rx="2" fill="#2d3470" />
-          {Array.from({ length: 6 }).map((_, idx) => (
-            <rect
-              key={idx}
-              x="14"
-              y={42 + idx * 10}
-              width={140 - idx * 10}
-              height="3"
-              rx="1.5"
-              fill={idx % 2 === 0 ? "#1f2444" : "#2d3470"}
-            />
-          ))}
-        </g>
+            <div className="mt-auto border-t border-line pt-5">
+              <p className="font-hand text-[22px] leading-none text-accent-strong">
+                the model never verifies.
+              </p>
+              <p className="mt-2 text-2xs leading-4 text-ink-faint">
+                Deterministic checks decide. You approve the fix.
+              </p>
+            </div>
+          </div>
+        </div>
 
-        {/* Floating card 3 — front */}
-        <g transform="translate(110 220) rotate(-3)" filter="url(#glow)">
-          <rect width="220" height="130" rx="14" fill="url(#cardGrad)" stroke="#7c7ff5" strokeOpacity="0.45" strokeWidth="1" />
-          <rect x="14" y="14" width="100" height="8" rx="4" fill="#c4b9ff" opacity="0.9" />
-          <rect x="14" y="30" width="140" height="4" rx="2" fill="#2d3470" />
-          {Array.from({ length: 7 }).map((_, idx) => (
-            <rect
-              key={idx}
-              x="14"
-              y={46 + idx * 11}
-              width={150 - idx * 8}
-              height="3"
-              rx="1.5"
-              fill={idx % 2 === 0 ? "#1f2444" : "#2d3470"}
-            />
-          ))}
-          <circle cx="186" cy="98" r="14" fill="#10b981" opacity="0.12" />
-          <path
-            d="m180 98 4 4 6-7"
-            fill="none"
-            stroke="#10b981"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-        </g>
-
-        {/* Annotation tags with thin connectors */}
-        <Tag x={28} y={92} dot="#7c7ff5" text="Detect drift" />
-        <Tag x={438} y={68} dot="#22d3ee" text="Find evidence" />
-        <Tag x={452} y={204} dot="#f59e0b" text="Propose fixes" />
-        <Tag x={40} y={314} dot="#10b981" text="Verify changes" />
-      </svg>
-
-      <div className="relative h-full">
-        <div className="pointer-events-none absolute inset-0" />
-      </div>
-    </div>
-  );
-}
-
-function Tag({
-  x,
-  y,
-  dot,
-  text,
-}: {
-  x: number;
-  y: number;
-  dot: string;
-  text: string;
-}) {
-  // Convert SVG viewBox coords into percentages for HTML placement.
-  const leftPct = (x / 500) * 100;
-  const topPct = (y / 400) * 100;
-  return (
-    <div
-      className="absolute"
-      style={{
-        left: `${leftPct}%`,
-        top: `${topPct}%`,
-        transform: "translate(-50%, -50%)",
-      }}
-    >
-      <div className="flex items-center gap-2 rounded-full border border-line bg-surface/85 px-3 py-1.5 text-[12px] font-medium text-ink shadow-accent backdrop-blur">
-        <span
-          aria-hidden="true"
-          className="grid h-4 w-4 place-items-center rounded-full border bg-surface"
-          style={{ borderColor: dot }}
-        >
-          <span
-            aria-hidden="true"
-            className="h-1 w-1 rounded-full"
-            style={{ background: dot, boxShadow: `0 0 6px ${dot}` }}
-          />
-        </span>
-        {text}
+        <div className="flex flex-wrap items-center justify-between gap-2 border-t border-line px-5 py-3">
+          <span className="font-mono text-[10px] uppercase tracking-[0.14em] text-ink-faint">
+            illustrative finding
+          </span>
+          <a
+            href="#workflow"
+            className="group inline-flex items-center gap-1.5 text-[12px] font-medium text-ink-muted transition-colors hover:text-accent-strong"
+          >
+            See the review loop
+            <svg
+              viewBox="0 0 16 16"
+              className="h-3 w-3 transition-transform group-hover:translate-x-0.5"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.7"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+            >
+              <path d="M3 8h10M9 4l4 4-4 4" />
+            </svg>
+          </a>
+        </div>
       </div>
     </div>
   );

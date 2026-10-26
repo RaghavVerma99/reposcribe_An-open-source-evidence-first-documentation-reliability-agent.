@@ -127,6 +127,44 @@ def test_cursor_pagination_still_works(client) -> None:
     assert page_two["next_cursor"] == "6"
 
 
-def test_health_reports_v0_2_0(client) -> None:
+def test_health_reports_v0_3_0(client) -> None:
     body = client.get("/api/v1/health").json()
-    assert body["version"] == "0.2.0"
+    assert body["version"] == "0.3.0"
+
+
+def test_request_logging_emits_one_info_line_per_request(client, caplog) -> None:
+    """#11 (OPS-02): one INFO line per request with method, path, status, duration_ms, request id."""
+    import logging
+
+    app_logger = logging.getLogger("reposcribe")
+    # The production code attaches its own StreamHandler in main.py and does
+    # not propagate. caplog needs propagation to see records.
+    original_propagate = app_logger.propagate
+    app_logger.propagate = True
+    caplog.set_level(logging.INFO, logger="reposcribe")
+
+    try:
+        client.get("/api/v1/health")
+        client.get("/api/v1/provider")
+        client.get("/api/v1/repositories/repo_does_not_exist")  # -> 404
+    finally:
+        app_logger.propagate = original_propagate
+
+    info_lines = [
+        record.getMessage()
+        for record in caplog.records
+        if record.name == "reposcribe" and record.levelno == logging.INFO
+    ]
+    assert len(info_lines) >= 3, info_lines
+    joined = "\n".join(info_lines)
+    assert "method=GET" in joined
+    assert "status=200" in joined
+    assert "status=404" in joined
+    assert "duration_ms=" in joined
+    # No body, no query string.
+    assert "q=" not in joined
+    assert "body=" not in joined
+    # Route template, not literal path with the id.
+    assert "path=/api/v1/health" in joined
+    assert "path=/api/v1/provider" in joined
+    assert "path=/api/v1/repositories/{repository_id}" in joined

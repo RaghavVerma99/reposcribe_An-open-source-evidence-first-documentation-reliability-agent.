@@ -5,12 +5,12 @@
 | Project | RepoScribe |
 | Tagline | Documentation that doesn't lie. |
 | Document | Product requirements + technical architecture + delivery plan |
-| Version | 2.2 |
-| Status | Implemented. Latest shipped tag: **v0.3.0** (which includes v0.2.0 honesty fixes plus endpoint-contract hardening). v1.0 is reserved for the milestone defined in §Roadmap. |
+| Version | 2.3 |
+| Status | Implemented. Source version **0.3.0**; no git tag exists, so this is not a published release. v1.0 is reserved for the milestone defined in §Roadmap. |
 | Owner | risshu.verma7@gmail.com |
 | Last updated | 2026-10-26 |
 | Supersedes | `docs/archive/RepoScribe_Complete_Technical_Spec_v1.md` |
-| Target release | Latest shipped tag is **v0.3.0**; v1.0 reserved for the milestone defined in the audit doc |
+| Target release | No release tag yet; next milestone is v1.0 (see the audit doc) |
 
 ---
 
@@ -613,37 +613,43 @@ The session records the audit result. Nothing in this journey writes to the sour
 
 ### 13.1 Direction
 
-A professional developer tool: dense enough for code review, calm, legible, distinctive. One coherent theme — a light neutral canvas by default, with a restrained dark workspace variant only if it is fully supported. Not a generic chatbot landing page.
+A professional developer tool: dense enough for code review, calm, legible, distinctive. The current build uses
+one true-black editorial theme with neutral cards, terminal-green accents, and locally hosted type. It is not a
+generic chatbot landing page. There is no light theme in this build.
 
-### 13.2 Tokens (proposed)
+### 13.2 Tokens (implemented)
 
 | Token | Value |
 |---|---|
-| Canvas | `#F7F8FA` light / `#0F1419` dark |
-| Surface | `#FFFFFF` / `#161C23` |
-| Ink | `#0F172A` primary, `#475569` secondary |
-| Border | `#E2E8F0` / `#243042` |
-| Accent | Indigo `#4F46E5` |
-| Status | success `#15803D`, warning `#B45309`, danger `#B91C1C`, info `#1D4ED8` |
-| Type | UI: Inter or system stack; code: JetBrains Mono |
-| Scale | 12 / 13 / 14 / 16 / 20 / 24 / 32 px |
+| Canvas | `#000000` |
+| Surface | `#111111`; elevated `#181818`; subtle `#1A1A1A` |
+| Ink | `#F7F7F7` primary, `#A3A3A3` secondary, `#808080` faint |
+| Border | `#2B2B2B` default, `#474747` strong |
+| Accent | Green `#22C55E` (hover `#4ADE80`, strong `#6EE7A0`) |
+| Status | success `#22C55E`, warning `#F59E0B`, danger `#F87171`, info `#38BDF8` |
+| Type | UI: Inter; display: Bricolage Grotesque; code: JetBrains Mono; accent: Caveat |
+| Scale | 10.5 / 12 / 13 / 13.5 / 15.5 / 26 / 36 / 60 px |
 | Spacing | 4 px grid (4, 8, 12, 16, 24, 32) |
-| Radius | 6 px controls, 10 px panels |
-| Motion | 120–180 ms for state changes only |
+| Radius | 9 px controls, 16 px panels, pill chips |
+| Motion | 160 ms for state changes; short entry animations only |
+
+The four families are self-hosted from `frontend/public/fonts/` and loaded by `frontend/src/styles/fonts.css`;
+the app makes no request to a font CDN.
 
 ### 13.3 Layout
 
 | Viewport | Structure |
 |---|---|
-| Desktop ≥ 1280 px | Left sidebar (logo, repository, Overview, Findings, Ask, Settings); top bar (repository, scan status, `Run audit`); main content; right inspector panel; diff uses the full central area with readable line numbers |
-| Tablet 768–1279 px | Sidebar collapses to icons; inspector becomes a slide-over |
-| Mobile < 768 px | Collapsible nav; stacked finding cards; inspector as drawer or detail view; horizontal diff scroll with file identity pinned |
+| Desktop ≥ 1024 px | Persistent left sidebar (repository, Overview, Findings, Ask, Settings); sticky top bar; main content. Finding detail separates the documentation claim from source evidence; patch review uses a full-width diff with readable line numbers |
+| Tablet 768–1023 px | Sidebar becomes a focus-trapped drawer opened from the top bar; cards stack; diff scrolls horizontally with file identity pinned |
+| Mobile < 768 px | Same drawer; single-column content; evidence sits below the finding; no horizontal page overflow |
 
 ### 13.4 Component inventory
 
-`AppShell`, `Sidebar`, `TopBar`, `RepoPicker`, `UploadDropzone`, `ScanProgress`, `StatCard`, `FindingCard`, `StatusBadge`, `SeverityBadge`, `FilterBar`, `SearchInput`, `EvidencePane`, `CodeSnippet` (with line numbers), `DiffViewer`, `ValidationChecklist`, `CitationChip`, `ChatThread`, `EmptyState`, `ErrorState`, `Skeleton`, `Toast`, `ConfirmDialog`.
-
-Build these against the existing component conventions. Do not add a component library if one already exists; do not add a heavy editor for the MVP.
+Implemented modules: `AppShell`, `Sidebar`, `TopBar`, `GlobalSearch`, `FindingCard`, `FilterBar`, `EvidencePane`,
+`DiffViewer`, `Notice`, and `Primitives` (`Button`, `Card`, `PageHeader`, `Stat`, `Badge`, `Spinner`,
+`EmptyState`, `ErrorNotice`, `ProviderPill`). Screen-specific composition lives in `features/` rather than a
+component library; `LandingPage` owns upload intake and `AskPage` owns the citation list.
 
 ## 14. States and copy
 
@@ -654,7 +660,7 @@ Every async surface implements all applicable states. A single global `isLoading
 | State | UI treatment |
 |---|---|
 | `idle` | Next-action affordance |
-| `loading` | Progress with what is happening; skeletons only for real loads |
+| `loading` | Progress with what is happening; no fake skeleton for a completed load |
 | `success` | Result plus timestamp |
 | `partial` | Result plus what was skipped and why |
 | `empty` | Explanation plus the next action |
@@ -867,11 +873,11 @@ Additions beyond the original contract, added to close gaps: audit-status pollin
 | Auth | Anonymous session cookie (`HttpOnly`, `SameSite=Lax`, `Secure` in production); workspaces are scoped to the session |
 | Rate limits | 120 requests/min/session across `/api/v1`, excluding `/api/v1/health` and `/api/v1/provider` (liveness and status polls) → 429 with `Retry-After` |
 
-The shipped build applies one global per-session limit rather than a separate audit limit; a dedicated audit quota is deferred.
+The current build applies one global per-session limit rather than a separate audit limit; a dedicated audit quota is deferred.
 
 ### 20.3 Long-running work
 
-Audits, indexing, and model calls are bounded (NFR-04, NFR-07). The shipped build runs audits synchronously and answers within the bound, so `POST /audits` returns `200` with the completed run. The `202` + polling path in `GET /audits/{audit_id}` remains the contract if a future analyzer exceeds the bound. No background queue in v1.0.
+Audits, indexing, and model calls are bounded (NFR-04, NFR-07). The current build runs audits synchronously and answers within the bound, so `POST /audits` returns `200` with the completed run. The `202` + polling path in `GET /audits/{audit_id}` remains the contract if a future analyzer exceeds the bound. No background queue in v1.0.
 
 ### 20.4 Error codes
 
@@ -1371,7 +1377,7 @@ Full suites; benchmark with real numbers; deploy; README; 1–3 minute recording
 | Phase | State | Evidence |
 |---|---|---|
 | 0 — Inspect and prove the integration | **Blocked** | The Alan contract is unverified; `docs/alan-integration.md` holds the open checklist. The demo-mode decision is recorded in `D-06`. |
-| 1 — Deterministic vertical slice | Done | Sample repository, safe inventory, all six checks, route mismatch with real lines; `63 passed` |
+| 1 — Deterministic vertical slice | Done | Sample repository, safe inventory, all six checks, route mismatch with real lines; `94 passed` |
 | 2 — Evidence and patch workflow | Done | Normalized findings, inspector, patch generation, diff, six-step validation, export |
 | 3 — Alan agent and grounded Q&A | Partial | Retrieval, citation verification, and provider errors are implemented and tested; the grounded Q&A path runs through the local demo provider. The live Alan call is not implemented. |
 | 4 — UI polish | Done | Seven screens, per-operation loading/empty/error/partial states, keyboard-visible focus, responsive down to 360 px, no inert controls |
@@ -1440,7 +1446,7 @@ Never mark planned work complete, and never publish fabricated screenshots, resu
 
 ### 34.2 Open decisions
 
-Record the resolution, date, and rationale for each. Status reflects the shipped v1.0 build.
+Record the resolution, date, and rationale for each. Status reflects the current `0.3.0` working tree.
 
 | ID | Decision | Resolution | Status |
 |---|---|---|---|
@@ -1491,4 +1497,5 @@ Do not build these before users validate the core workflow.
 | 1.0 | — | Original implementation brief (`docs/archive/RepoScribe_Complete_Technical_Spec_v1.md`) |
 | 2.0 | 2026-10-26 | Restructured into five parts; added requirement IDs, check catalog, measurable NFRs, API error taxonomy and missing endpoints, identifier scheme, state matrix, traceability, risk and decision registers, test IDs; converted ad-hoc lists and ASCII tables to Markdown tables; resolved the API-versioning and session-model gaps by recorded decision. No requirement intent removed. |
 | 2.1 | 2026-10-26 | Aligned the document with the shipped build: module map, analyzer contracts, API success codes, rate-limit and long-running behaviour, error codes (`patch_not_available`, `audit_not_found`), decision-log resolutions, per-phase shipped status, and the real test and build commands. |
-| 2.2 | 2026-10-26 | **v0.3.0**: rate limit excludes `/health` and `/provider`; findings filters validated against `Literal[...]` so invalid values return 422; cursor validated as a non-negative integer (also 422 on garbage); /health probes workspace writability once per process; version string synced to `0.2.0` across `pyproject.toml`, `package.json`, FastAPI metadata, `/health.version`, README, and SPEC. See `docs/audit-2026-10.md`. |
+| 2.2 | 2026-10-26 | **0.3.0 hardening (unreleased; no git tag)**: rate limit excludes `/health` and `/provider`; findings filters validated against `Literal[...]` so invalid values return 422; cursor validated as a non-negative integer (also 422 on garbage); /health probes workspace writability once per process; version string synced across `pyproject.toml`, `package.json`, FastAPI metadata, `/health.version`, README, and SPEC. See `docs/audit-2026-10.md`. |
+| 2.3 | 2026-10-26 | Corrected status and UI documentation to the implemented build: source version `0.3.0` with no git tag; true-black editorial tokens and self-hosted fonts in place of the proposed light theme; component inventory aligned with shipped modules. Recorded SPA deep-link fallback, secret-file exclusion from the index/manifest/counts, streaming upload limit, full route-template logging, last-access workspace TTL, the per-repository audit lock, and `94 passed` backend tests. |

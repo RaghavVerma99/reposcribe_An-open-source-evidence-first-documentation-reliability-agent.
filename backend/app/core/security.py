@@ -192,11 +192,16 @@ def _project_root(dest: Path) -> Path:
 
 
 def iter_files(root: Path):
-    """Yield (relative path, absolute path, size) for non-excluded files."""
+    """Yield (relative path, absolute path, size) for indexable files.
+
+    Exclusion covers build output, binary assets, and secret-bearing files
+    (``.env``, keys, credential stores) so manifests and audit counts never
+    include something that is not safe to index.
+    """
     for path in sorted(root.rglob("*")):
         if not path.is_file():
             continue
         rel = path.relative_to(root).as_posix()
-        if is_excluded(rel):
+        if is_excluded(rel) or is_secret_path(rel):
             continue
         yield rel, path, path.stat().st_size

@@ -5,13 +5,11 @@ import type {
   FindingPage,
   FindingStatus,
   GroundedAnswer,
-  HealthResponse,
   PatchDetail,
   PatchDraft,
   ProviderStatus,
   Repository,
   RepositoryOverview,
-  SearchHit,
   ValidationResult,
 } from "./types";
 
@@ -64,7 +62,6 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
 }
 
 export const api = {
-  health: () => request<HealthResponse>("/health"),
   provider: () => request<ProviderStatus>("/provider"),
 
   createSample: (sampleId = "fastapi-users") => {
@@ -84,10 +81,6 @@ export const api = {
     request<Repository>(`/repositories/${repositoryId}/index`, { method: "POST" }),
   overview: (repositoryId: string) =>
     request<RepositoryOverview>(`/repositories/${repositoryId}/overview`),
-  search: (repositoryId: string, query: string) =>
-    request<{ hits: SearchHit[]; truncated: boolean }>(
-      `/repositories/${repositoryId}/search?q=${encodeURIComponent(query)}`,
-    ),
   deleteRepository: (repositoryId: string) =>
     request<void>(`/repositories/${repositoryId}`, { method: "DELETE" }),
 

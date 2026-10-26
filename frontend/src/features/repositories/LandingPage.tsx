@@ -3,19 +3,23 @@ import { useNavigate } from "react-router-dom";
 
 import { useAppState } from "../../app/AppState";
 import { api, ApiError } from "../../lib/api";
-import { cn } from "../../lib/format";
-import { StatusPill } from "../../components/ui/Primitives";
+import { CHECK_LABELS, cn } from "../../lib/format";
+import { usePageTitle } from "../../lib/usePageTitle";
+import { Button, ErrorNotice, ProviderPill } from "../../components/ui/Primitives";
 import FeaturedIllustration from "../../components/landing/FeaturedIllustration";
 
-const SAMPLE_LABELS = ["fastapi-template", "nextjs-app", "python-toolkit"];
+const GITHUB_URL = "https://github.com/RaghavVerma99/reposcribe";
+
+const FACTS = ["No GitHub token", "Read-only analysis", "Nothing written to your repository"];
 
 const STEPS = [
   {
     tone: "accent" as const,
     label: "Detect",
-    line: "Find broken links, outdated APIs, and inaccurate guides.",
+    line: "Broken links, stale routes, undocumented configuration, and README gaps — each reported with its scope.",
+    tag: "deterministic",
     icon: (
-      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" className="h-3.5 w-3.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <svg viewBox="0 0 16 16" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
         <circle cx="7" cy="7" r="4" />
         <path d="m10 10 3.5 3.5" />
       </svg>
@@ -24,9 +28,10 @@ const STEPS = [
   {
     tone: "info" as const,
     label: "Explain",
-    line: "Get clear, source-backed explanations.",
+    line: "Every claim is paired with the file excerpt that supports or contradicts it. No evidence, no conclusion.",
+    tag: "evidence-backed",
     icon: (
-      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" className="h-3.5 w-3.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <svg viewBox="0 0 16 16" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
         <path d="M3 3.5h7l3 3V12a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V4.5a1 1 0 0 1 1-1Z" />
         <path d="M5.5 8.5h5M5.5 10.5h3" />
       </svg>
@@ -34,10 +39,11 @@ const STEPS = [
   },
   {
     tone: "warn" as const,
-    label: "Repair",
-    line: "Receive AI-generated patches with context.",
+    label: "Draft",
+    line: "A proposed patch and rationale, generated from the finding. It stays a draft and is never applied for you.",
+    tag: "reviewable",
     icon: (
-      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" className="h-3.5 w-3.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <svg viewBox="0 0 16 16" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
         <path d="M3 12V4.5a1.5 1.5 0 0 1 1.5-1.5h7A1.5 1.5 0 0 1 13 4.5V12" />
         <path d="M3 12h10v2.5H3Z" />
         <path d="M6.5 7.5h3" />
@@ -47,9 +53,10 @@ const STEPS = [
   {
     tone: "ok" as const,
     label: "Verify",
-    line: "Validate fixes before applying them.",
+    line: "Validation runs against the indexed snapshot before download, and reports what it could not check.",
+    tag: "no auto-apply",
     icon: (
-      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" className="h-3.5 w-3.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <svg viewBox="0 0 16 16" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
         <path d="M8 1.75 13.25 4.25v6.5L8 13.25 2.75 10.75v-6.5Z" />
         <path d="m5.6 8.5 1.8 1.8 3.2-3.5" />
       </svg>
@@ -57,155 +64,46 @@ const STEPS = [
   },
 ];
 
-const RECENT = [
+const STEP_TONES = {
+  accent: {
+    icon: "border-accent/25 bg-accent-soft text-accent-strong",
+    dot: "bg-accent",
+    label: "text-accent-strong",
+  },
+  info: {
+    icon: "border-info/25 bg-info-soft text-info",
+    dot: "bg-info",
+    label: "text-info",
+  },
+  warn: {
+    icon: "border-warn/25 bg-warn-soft text-warn",
+    dot: "bg-warn",
+    label: "text-warn",
+  },
+  ok: {
+    icon: "border-ok/25 bg-ok-soft text-ok",
+    dot: "bg-ok",
+    label: "text-ok",
+  },
+};
+
+const PROMISES = [
   {
-    name: "fastapi-template",
-    when: "2 hours ago",
-    findings: 12,
-    tone: "ok" as const,
-    label: "fixed",
-    pulsing: true,
+    title: "Want to see the whole loop?",
+    body: "Run the bundled sample. No token, account, or setup required.",
+    tone: "text-info",
   },
   {
-    name: "ai-notes-app",
-    when: "18 hours ago",
-    findings: 8,
-    tone: "danger" as const,
-    label: "1 fixed",
-    pulsing: false,
+    title: "Have a repository?",
+    body: "Upload a ZIP. The original files are never modified.",
+    tone: "text-warn",
   },
   {
-    name: "ml-toolkit",
-    when: "3 days ago",
-    findings: 5,
-    tone: "danger" as const,
-    label: "0 fixed",
-    pulsing: false,
+    title: "Need the receipts?",
+    body: "Every finding points back to the file excerpt that supports it.",
+    tone: "text-accent-strong",
   },
 ];
-
-function HeroActionButton(props: {
-  icon: React.ReactNode;
-  children: React.ReactNode;
-  variant: "primary" | "outline";
-  onClick?: () => void;
-  loading?: boolean;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={props.onClick}
-      disabled={props.loading}
-      className={cn(
-        "inline-flex h-11 items-center justify-center gap-2 rounded-control px-4 text-[14px] font-medium transition-all duration-150 disabled:cursor-not-allowed",
-        props.variant === "primary"
-          ? "bg-accent text-white shadow-glow hover:bg-accent-hover hover:shadow-[0_0_0_1px_rgba(124,127,245,0.7),0_0_48px_-8px_rgba(124,127,245,0.85)]"
-          : "border border-line bg-surface text-ink hover:border-line-strong hover:bg-surface-elevated",
-      )}
-    >
-      {props.icon}
-      {props.children}
-    </button>
-  );
-}
-
-function RecentRow({
-  name,
-  when,
-  findings,
-  tone,
-  label,
-  pulsing,
-}: {
-  name: string;
-  when: string;
-  findings: number;
-  tone: "ok" | "danger" | "warn";
-  label: string;
-  pulsing: boolean;
-}) {
-  return (
-    <article className="group flex items-center gap-4 rounded-panel border border-line bg-surface px-4 py-3 hairline transition-colors hover:border-line-strong">
-      <StatusPill tone={tone} pulsing={pulsing}>
-        {label}
-      </StatusPill>
-      <div className="min-w-0 flex-1">
-        <p className="truncate text-[13.5px] font-medium text-ink">{name}</p>
-        <p className="text-2xs text-ink-muted">
-          {when} <span className="mx-1 text-line-strong">·</span>
-          <span className="font-mono">{findings}</span> findings
-        </p>
-      </div>
-      <button
-        type="button"
-        className="grid h-7 w-7 place-items-center rounded-full border border-line text-ink-faint transition-all group-hover:border-accent/55 group-hover:text-accent-strong"
-        aria-label={`Open ${name}`}
-      >
-        <svg viewBox="0 0 16 16" className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-          <path d="m6 4 4 4-4 4" />
-        </svg>
-      </button>
-    </article>
-  );
-}
-
-function WorkflowCard({
-  tone,
-  label,
-  line,
-  icon,
-}: {
-  tone: "accent" | "info" | "warn" | "ok";
-  label: string;
-  line: string;
-  icon: React.ReactNode;
-}) {
-  const toneClass: Record<string, { ring: string; bg: string; text: string; bullet: string }> = {
-    accent: {
-      ring: "shadow-[0_0_24px_-8px_rgba(99,102,241,0.6)]",
-      bg: "border-accent/30 bg-accent-soft text-accent-strong",
-      text: "text-accent-strong",
-      bullet: "bg-accent-strong shadow-[0_0_8px_rgba(124,127,245,0.75)]",
-    },
-    info: {
-      ring: "shadow-[0_0_24px_-8px_rgba(34,211,238,0.6)]",
-      bg: "border-info/30 bg-info-soft text-info",
-      text: "text-info",
-      bullet: "bg-info shadow-[0_0_8px_rgba(34,211,238,0.75)]",
-    },
-    warn: {
-      ring: "shadow-[0_0_24px_-8px_rgba(245,158,11,0.6)]",
-      bg: "border-warn/30 bg-warn-soft text-warn",
-      text: "text-warn",
-      bullet: "bg-warn shadow-[0_0_8px_rgba(245,158,11,0.75)]",
-    },
-    ok: {
-      ring: "shadow-[0_0_24px_-8px_rgba(16,185,129,0.6)]",
-      bg: "border-ok/30 bg-ok-soft text-ok",
-      text: "text-ok",
-      bullet: "bg-ok shadow-[0_0_8px_rgba(16,185,129,0.75)]",
-    },
-  };
-  const t = toneClass[tone];
-  return (
-    <div className="flex items-center gap-3 rounded-panel border border-line bg-surface p-4 hairline transition-colors hover:border-line-strong">
-      <span
-        className={cn(
-          "relative grid h-9 w-9 shrink-0 place-items-center rounded-full border",
-          t.bg,
-          t.ring,
-        )}
-      >
-        <span aria-hidden="true" className={cn("absolute inset-0 m-auto h-1 w-1 rounded-full", t.bullet)} />
-        <span className="relative">{icon}</span>
-      </span>
-      <div className="min-w-0">
-        <p className={cn("text-[13px] font-semibold tracking-[-0.005em]", t.text)}>{label}</p>
-        <p className="mt-0.5 text-[12.5px] leading-5 text-ink-muted">{line}</p>
-      </div>
-    </div>
-  );
-}
 
 export default function LandingPage() {
   const navigate = useNavigate();
@@ -213,8 +111,13 @@ export default function LandingPage() {
   const fileInput = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState<"sample" | "upload" | null>(null);
   const [error, setError] = useState<ApiError | null>(null);
+  usePageTitle();
+
+  // Replay the original intent on Retry instead of silently opening the sample.
+  const lastIntent = useRef<{ kind: "sample" } | { kind: "upload"; file: File } | null>(null);
 
   async function openSample() {
+    lastIntent.current = { kind: "sample" };
     setBusy("sample");
     setError(null);
     try {
@@ -228,6 +131,7 @@ export default function LandingPage() {
   }
 
   async function upload(file: File) {
+    lastIntent.current = { kind: "upload", file };
     setBusy("upload");
     setError(null);
     try {
@@ -240,219 +144,406 @@ export default function LandingPage() {
     }
   }
 
-  // Mock data shown for the "Recent Analyses" demo. Once persistence lands,
-  // this section will read from the real list scoped to the current user.
-  const totalRecentFindings = RECENT.reduce((sum, item) => sum + item.findings, 0);
+  async function retryLast() {
+    const intent = lastIntent.current;
+    if (!intent) return;
+    if (intent.kind === "sample") {
+      await openSample();
+    } else {
+      // The File object is still referenced even after the input reset.
+      await upload(intent.file);
+    }
+  }
 
   return (
-    <div className="relative min-h-screen overflow-hidden bg-canvas">
-      <div aria-hidden="true" className="ambient pointer-events-none absolute inset-x-0 top-0 h-[640px]" />
+    <div id="top" className="relative min-h-screen overflow-hidden bg-canvas">
+      <div aria-hidden="true" className="ambient pointer-events-none absolute inset-x-0 top-0 h-[620px]" />
 
-      <main className="relative mx-auto max-w-6xl px-6 pb-24 pt-10 lg:pt-16">
-        {/* HERO + ILLUSTRATION */}
-        <div className="grid gap-12 lg:grid-cols-[1.05fr_0.95fr] lg:items-start">
-          <div>
-            <p className="inline-flex items-center gap-2 rounded-chip border border-line bg-surface/70 px-3 py-1 text-2xs font-medium uppercase tracking-[0.12em] text-ink-muted backdrop-blur">
-              <span
+      <div className="relative mx-auto w-full max-w-3xl px-5 pb-10 sm:px-6">
+        <div className="flex items-center justify-between gap-4 pt-6">
+          <div className="flex items-center gap-2">
+            <span
+              aria-hidden="true"
+              className="h-1.5 w-1.5 rounded-full bg-accent shadow-[0_0_10px_rgba(34,197,94,0.65)]"
+            />
+            <span className="font-mono text-[10.5px] uppercase tracking-[0.16em] text-ink-faint">
+              Documentation reliability
+            </span>
+          </div>
+          <a
+            href="#start"
+            className="group hidden items-center gap-1.5 sm:flex"
+            aria-label="Jump to the start section"
+          >
+            <span className="font-hand text-[20px] leading-none text-ink-muted transition-colors group-hover:text-ink">
+              evidence first
+            </span>
+            <svg
+              viewBox="0 0 20 20"
+              className="h-4 w-4 -rotate-12 text-ink-faint transition-colors group-hover:text-accent-strong"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+            >
+              <path d="M4 5c6 1 9 4 9 10M13 11l3 4 3-4" />
+            </svg>
+          </a>
+        </div>
+
+        <nav className="mt-9 flex justify-center" aria-label="Page sections">
+          <div className="flex items-center gap-0.5 rounded-full border border-line bg-surface/50 px-1.5 py-1.5 backdrop-blur">
+            <a
+              href="#top"
+              aria-current="page"
+              className="nav-pill nav-pill-active inline-flex items-center gap-1.5"
+            >
+              <svg
+                viewBox="0 0 16 16"
+                className="h-3.5 w-3.5"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.5"
+                strokeLinecap="round"
+                strokeLinejoin="round"
                 aria-hidden="true"
-                className="h-1 w-1 rounded-full bg-accent-strong shadow-[0_0_8px_rgba(124,127,245,0.7)]"
-              />
-              Documentation that doesn&apos;t lie
-            </p>
+              >
+                <path d="M2.5 7.2 8 2.7l5.5 4.5V13a1 1 0 0 1-1 1H10V10H6v4H3.5a1 1 0 0 1-1-1Z" />
+              </svg>
+              Home
+            </a>
+            <a href="#workflow" className="nav-pill">
+              Workflow
+            </a>
+            <a href="#checks" className="nav-pill">
+              Checks
+            </a>
+            <a href="#start" className="nav-pill">
+              Start
+            </a>
+          </div>
+        </nav>
 
-            <h1 className="mt-7 text-display text-ink">
-              Your code evolves.
-              <br />
-              <span className="text-gradient">Let your docs keep up.</span>
-            </h1>
+        <main>
+          <section className="mt-12 animate-fade-up">
+            <div className="flex items-center gap-4 sm:gap-5">
+              <div
+                aria-hidden="true"
+                className="relative grid h-[76px] w-[76px] shrink-0 place-items-center rounded-2xl border border-line bg-ink text-canvas shadow-[inset_0_1px_0_rgba(255,255,255,0.4)] sm:h-20 sm:w-20"
+              >
+                <span className="font-display text-[25px] font-extrabold tracking-[-0.07em] sm:text-[28px]">
+                  RS
+                </span>
+                <span className="absolute -right-1 -top-1 h-2.5 w-2.5 rounded-full border-2 border-canvas bg-accent" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <h1 className="text-[30px] font-bold leading-[1.05] tracking-[-0.04em] text-ink">
+                  RepoScribe
+                </h1>
+                <p className="mt-1 text-sm text-ink-muted">Documentation reliability</p>
+              </div>
+              <a
+                href={GITHUB_URL}
+                target="_blank"
+                rel="noreferrer"
+                aria-label="RepoScribe on GitHub"
+                title="RepoScribe on GitHub"
+                className="grid h-10 w-10 shrink-0 place-items-center rounded-full border border-line bg-surface/50 text-ink-muted transition-colors hover:border-line-strong hover:text-ink"
+              >
+                <svg viewBox="0 0 16 16" className="h-4 w-4" fill="currentColor" aria-hidden="true">
+                  <path d="M8 0a8 8 0 0 0-2.5 15.6c.4 0 .5-.2.5-.4v-1.4c-2.2.5-2.7-1-2.7-1-.4-.9-.9-1.2-.9-1.2-.7-.5 0-.5 0-.5.8 0 1.2.8 1.2.8.7 1.2 1.9.9 2.4.7 0-.5.3-.9.5-1.1-1.8-.2-3.6-.9-3.6-3.9 0-.9.3-1.6.8-2.1-.1-.2-.4-1 .1-2.1 0 0 .7-.2 2.2.8a7.6 7.6 0 0 1 4 0c1.5-1 2.2-.8 2.2-.8.4 1.1.2 1.9 0 2.1.5.5.8 1.2.8 2.1 0 3-1.8 3.7-3.6 3.9.3.2.5.7.5 1.4v2.1c0 .2.1.4.5.4A8 8 0 0 0 8 0Z" />
+                </svg>
+              </a>
+            </div>
 
-            <p className="body-text mt-5 max-w-xl">
-              RepoScribe analyzes your repository, detects{" "}
-              <span className="underline-accent font-medium text-ink">documentation drift</span>, and proposes
-              verified fixes
-              {" "}— powered by Alan AI and open models.
-            </p>
+            <div className="mt-8 space-y-4 text-[15px] leading-[1.75] text-ink-muted sm:text-[15.5px]">
+              <p>
+                RepoScribe finds the places where a repository and its documentation disagree —
+                then shows the <span className="text-accent-strong">evidence</span> behind every
+                finding.
+              </p>
+              <p>
+                No GitHub token. No writes to your code.{" "}
+                <span className="font-medium text-ink">Every conclusion is inspectable</span>, and
+                every proposed fix stays a draft until you review it.
+              </p>
+            </div>
 
-            <div className="mt-8 flex flex-wrap items-center gap-3">
-              <HeroActionButton
+            <div className="mt-7 flex flex-wrap items-center gap-2.5">
+              <Button
                 variant="primary"
                 onClick={openSample}
                 loading={busy === "sample"}
-                icon={
-                  <svg viewBox="0 0 16 16" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                    <path d="M3.5 5.5h9M10 2.5l3 3-3 3M12.5 10.5h-9" />
-                  </svg>
-                }
+                disabled={busy !== null}
+                className="h-11 px-5 text-[14px]"
               >
+                <svg viewBox="0 0 16 16" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="M3.5 5.5h9M10 2.5l3 3-3 3M12.5 10.5h-9" />
+                </svg>
                 Try sample repository
-              </HeroActionButton>
-              <HeroActionButton
-                variant="outline"
+              </Button>
+              <Button
+                variant="secondary"
                 onClick={() => fileInput.current?.click()}
                 loading={busy === "upload"}
-                icon={
-                  <svg viewBox="0 0 16 16" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                    <path d="M3 12V4.5A1.5 1.5 0 0 1 4.5 3h7A1.5 1.5 0 0 1 13 4.5V12" />
-                    <path d="M3 12h10v2.5H3Z" />
-                  </svg>
-                }
+                disabled={busy !== null}
+                className="h-11 px-5 text-[14px]"
               >
+                <svg viewBox="0 0 16 16" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="M3 12V4.5A1.5 1.5 0 0 1 4.5 3h7A1.5 1.5 0 0 1 13 4.5V12" />
+                  <path d="M3 12h10v2.5H3Z" />
+                </svg>
                 Upload repository ZIP
-              </HeroActionButton>
-              <input
-                ref={fileInput}
-                type="file"
-                accept=".zip,application/zip"
-                className="hidden"
-                onChange={(event) => {
-                  const file = event.target.files?.[0];
-                  if (file) void upload(file);
-                  event.target.value = "";
-                }}
-              />
+              </Button>
+              <a
+                href={GITHUB_URL}
+                target="_blank"
+                rel="noreferrer"
+                className="link-button h-11 px-4"
+              >
+                <svg viewBox="0 0 16 16" className="h-3.5 w-3.5" fill="currentColor" aria-hidden="true">
+                  <path d="M8 0a8 8 0 0 0-2.5 15.6c.4 0 .5-.2.5-.4v-1.4c-2.2.5-2.7-1-2.7-1-.4-.9-.9-1.2-.9-1.2-.7-.5 0-.5 0-.5.8 0 1.2.8 1.2.8.7 1.2 1.9.9 2.4.7 0-.5.3-.9.5-1.1-1.8-.2-3.6-.9-3.6-3.9 0-.9.3-1.6.8-2.1-.1-.2-.4-1 .1-2.1 0 0 .7-.2 2.2.8a7.6 7.6 0 0 1 4 0c1.5-1 2.2-.8 2.2-.8.4 1.1.2 1.9 0 2.1.5.5.8 1.2.8 2.1 0 3-1.8 3.7-3.6 3.9.3.2.5.7.5 1.4v2.1c0 .2.1.4.5.4A8 8 0 0 0 8 0Z" />
+                </svg>
+                GitHub
+              </a>
+            </div>
+
+            <div className="mt-5 flex flex-wrap items-center gap-x-2 gap-y-2 text-2xs text-ink-faint">
+              {FACTS.map((fact, index) => (
+                <span key={fact} className="inline-flex items-center gap-2">
+                  {index > 0 ? (
+                    <span aria-hidden="true" className="text-line-strong">
+                      ·
+                    </span>
+                  ) : null}
+                  {fact}
+                </span>
+              ))}
               {provider ? (
-                <p className="mt-1 inline-flex items-center gap-2 rounded-chip border border-line bg-surface/60 px-2.5 py-1 text-2xs text-ink-muted">
-                  <span
-                    aria-hidden="true"
-                    className={`h-1 w-1 rounded-full ${
-                      provider.mode === "live" ? "bg-ok" : "bg-info"
-                    }`}
-                  />
-                  {provider.mode === "live" ? "live provider" : "local demo mode"}
-                </p>
+                <ProviderPill
+                  mode={provider.mode}
+                  message={provider.message}
+                  className="ml-0.5"
+                />
               ) : null}
             </div>
 
-            <div className="mt-4 flex flex-wrap items-center gap-x-3 gap-y-1 text-2xs text-ink-faint">
-              <span>Requires no GitHub token</span>
-              <span aria-hidden="true" className="text-line-strong">·</span>
-              <span>Read-only analysis</span>
-              <span aria-hidden="true" className="text-line-strong">·</span>
-              <span>Nothing is written to your repository</span>
-            </div>
+            <input
+              ref={fileInput}
+              type="file"
+              accept=".zip,application/zip"
+              className="hidden"
+              onChange={(event) => {
+                const file = event.target.files?.[0];
+                if (file) void upload(file);
+                event.target.value = "";
+              }}
+            />
+          </section>
 
-            {error ? (
-              <div className="mt-6 max-w-xl rounded-panel border border-danger/30 bg-danger-soft p-4 text-[13px] text-danger hairline">
-                <p className="font-medium">{error.message}</p>
-                <p className="mt-1.5 font-mono text-2xs text-danger/70">
-                  {error.code}
-                  {error.requestId ? ` · req ${error.requestId}` : ""}
-                </p>
-              </div>
-            ) : null}
-
-            <div className="mt-10 flex flex-wrap items-center gap-3 text-[13px]">
-              <span className="text-ink-muted">Try an example:</span>
-              <div className="flex flex-wrap items-center gap-2">
-                {SAMPLE_LABELS.map((label) => (
-                  <button
-                    key={label}
-                    type="button"
-                    onClick={openSample}
-                    className="inline-flex h-8 items-center gap-1.5 rounded-chip border border-line bg-surface px-3 text-2xs font-medium text-ink-muted transition-colors hover:border-line-strong hover:text-ink"
-                  >
-                    <span aria-hidden="true" className="h-1 w-1 rounded-full bg-accent-strong" />
-                    {label}
-                  </button>
-                ))}
-              </div>
-            </div>
-          </div>
-
-          <div className="lg:pt-4">
+          <section className="mt-12 animate-fade-in">
             <FeaturedIllustration />
-          </div>
-        </div>
+          </section>
 
-        {/* WORKFLOW */}
-        <section className="mt-20">
-          <div className="mb-6 flex items-baseline justify-between gap-3">
-            <div>
-              <h2 className="text-h1 text-ink">From drift to verified fix</h2>
-              <p className="body-text mt-1 max-w-xl">
-                Each step is deterministic. The model only explains and drafts — never verifies.
-              </p>
-            </div>
-            <a
-              href="https://github.com/RaghavVerma99/reposcribe"
-              target="_blank"
-              rel="noreferrer"
-              className="hidden h-9 items-center gap-2 rounded-control border border-line bg-surface px-3 text-[12.5px] text-ink-muted transition-colors hover:border-line-strong hover:text-ink sm:inline-flex"
-            >
-              <svg viewBox="0 0 16 16" className="h-3.5 w-3.5" fill="currentColor" aria-hidden="true">
-                <path d="M8 0a8 8 0 0 0-2.5 15.6c.4 0 .5-.2.5-.4v-1.4c-2.2.5-2.7-1-2.7-1-.4-.9-.9-1.2-.9-1.2-.7-.5 0-.5 0-.5.8 0 1.2.8 1.2.8.7 1.2 1.9.9 2.4.7 0-.5.3-.9.5-1.1-1.8-.2-3.6-.9-3.6-3.9 0-.9.3-1.6.8-2.1-.1-.2-.4-1 .1-2.1 0 0 .7-.2 2.2.8a7.6 7.6 0 0 1 4 0c1.5-1 2.2-.8 2.2-.8.4 1.1.2 1.9 0 2.1.5.5.8 1.2.8 2.1 0 3-1.8 3.7-3.6 3.9.3.2.5.7.5 1.4v2.1c0 .2.1.4.5.4A8 8 0 0 0 8 0Z" />
-              </svg>
-              GitHub
-            </a>
-          </div>
-          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-            {STEPS.map((step) => (
-              <WorkflowCard key={step.label} {...step} />
-            ))}
-          </div>
-        </section>
-
-        {/* RECENT ANALYSES + QUOTE */}
-        <section className="mt-20 grid gap-6 lg:grid-cols-[1fr_360px]">
-          <div>
-            <div className="mb-5 flex items-center justify-between gap-3">
+          <section id="workflow" className="mt-20 scroll-mt-8">
+            <div className="flex flex-wrap items-end justify-between gap-3">
               <div>
-                <h2 className="text-h2 text-ink">Recent analyses</h2>
-                <p className="text-[12.5px] text-ink-faint">
-                  <span className="font-mono text-ink">{RECENT.length}</span> analyses ·{" "}
-                  <span className="font-mono text-ink">{totalRecentFindings}</span> findings addressed
-                </p>
+                <p className="eyebrow">The review loop</p>
+                <h2 className="mt-1.5 text-[30px] leading-[36px] text-ink">From drift to verified fix</h2>
               </div>
-              <a
-                href="#"
-                className="text-[12.5px] font-medium text-accent-strong hover:underline"
-              >
-                View all
-              </a>
+              <span className="hidden font-hand text-[20px] leading-none text-ink-faint sm:inline">
+                four honest steps
+              </span>
             </div>
-            <div className="space-y-2.5">
-              {RECENT.map((item) => (
-                <RecentRow key={item.name} {...item} />
+            <p className="body-text mt-2 max-w-xl">
+              Deterministic checks decide what is true. The model only explains and drafts. You
+              make the final call.
+            </p>
+
+            <div className="mt-7 grid gap-4 sm:grid-cols-2">
+              {STEPS.map((step, index) => {
+                const tone = STEP_TONES[step.tone];
+                return (
+                  <article
+                    key={step.label}
+                    className="group rounded-2xl border border-line bg-surface p-5 transition-all duration-300 hover:border-line-strong hover:shadow-[0_18px_44px_-32px_rgba(0,0,0,0.95)]"
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <span
+                        className={cn(
+                          "grid h-9 w-9 place-items-center rounded-xl border",
+                          tone.icon,
+                        )}
+                      >
+                        {step.icon}
+                      </span>
+                      <span className="font-mono text-2xs text-ink-faint">
+                        0{index + 1}
+                      </span>
+                    </div>
+                    <h3 className="mt-5 font-display text-[17px] font-semibold tracking-[-0.015em] text-ink">
+                      {step.label}
+                    </h3>
+                    <p className="mt-1.5 text-[13px] leading-6 text-ink-muted">{step.line}</p>
+                    <div className="mt-4 flex items-center gap-2 border-t border-line pt-3">
+                      <span aria-hidden="true" className={cn("h-1 w-1 rounded-full", tone.dot)} />
+                      <span className="font-mono text-[10px] uppercase tracking-[0.12em] text-ink-faint">
+                        {step.tag}
+                      </span>
+                    </div>
+                  </article>
+                );
+              })}
+            </div>
+          </section>
+
+          <section id="checks" className="mt-20 scroll-mt-8">
+            <h2 className="text-[30px] leading-[36px] text-ink">Checks in the box</h2>
+            <p className="body-text mt-2 max-w-xl">
+              Deterministic checks with a stated scope. If the evidence is missing, the result is
+              reported as inconclusive — never quietly passed.
+            </p>
+            <div className="mt-6 flex flex-wrap gap-2.5">
+              {Object.values(CHECK_LABELS).map((label) => (
+                <span key={label} className="tech-badge">
+                  <span aria-hidden="true" className="h-1 w-1 rounded-full bg-accent-strong" />
+                  {label}
+                </span>
               ))}
             </div>
-          </div>
+            <p className="mt-6 border-l-2 border-accent/40 pl-3 text-2xs leading-5 text-ink-faint">
+              RepoScribe reports what it could not evaluate. A partial audit never turns an unrun
+              check into a clean result.
+            </p>
+          </section>
 
-          <aside className="relative">
-            <div className="relative overflow-hidden rounded-panel border border-line bg-surface p-6 hairline before:absolute before:inset-0 before:rounded-panel before:border before:border-accent/30 before:opacity-60">
-              <span aria-hidden="true" className="text-2xs font-medium uppercase tracking-[0.12em] text-ink-faint">
-                One developer&apos;s take
-              </span>
-              <p className="mt-3 font-display text-2xl leading-[1.15] tracking-[-0.02em] text-ink">
-                <span className="text-ink">&ldquo;Finally, a tool that keeps my&nbsp;</span>
-                <span className="text-gradient">documentation&nbsp;</span>
-                <span className="text-ink">honest.&rdquo;</span>
-              </p>
-              <p className="mt-4 flex items-center gap-2 text-[12.5px] text-ink-muted">
-                <span
-                  aria-hidden="true"
-                  className="grid h-7 w-7 place-items-center rounded-full bg-accent-soft text-accent-strong"
-                >
-                  D
-                </span>
-                Developer
-              </p>
+          <section id="start" className="mt-20 scroll-mt-8">
+            <div className="grid gap-6 md:grid-cols-[1.05fr_0.95fr]">
+              <div className="rounded-2xl border border-line bg-surface p-7 sm:p-8">
+                <p className="eyebrow">Start here</p>
+                <h2 className="mt-2 text-[28px] leading-[1.15] text-ink">
+                  Let&apos;s check what your{" "}
+                  <em className="font-hand text-[1.18em] not-italic text-accent-strong">
+                    docs actually say
+                  </em>
+                  .
+                </h2>
+                <div className="mt-7 space-y-5">
+                  {PROMISES.map((promise) => (
+                    <div key={promise.title}>
+                      <h3
+                        className={cn(
+                          "font-display text-[15.5px] font-semibold tracking-[-0.01em]",
+                          promise.tone,
+                        )}
+                      >
+                        {promise.title}
+                      </h3>
+                      <p className="mt-1 text-[13px] leading-5 text-ink-muted">{promise.body}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="flex flex-col items-center justify-center rounded-2xl border border-line bg-surface/40 p-7 text-center">
+                <div className="grid h-20 w-20 place-items-center rounded-full border-2 border-dashed border-line-strong text-ink">
+                  <svg
+                    viewBox="0 0 16 16"
+                    className="h-6 w-6"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.4"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    aria-hidden="true"
+                  >
+                    <path d="M8 1.75 13.25 4.25v6.5L8 13.25 2.75 10.75v-6.5Z" />
+                    <path d="m5.6 8.5 1.8 1.8 3.2-3.5" />
+                  </svg>
+                </div>
+                <h3 className="mt-5 font-display text-[20px] font-semibold tracking-[-0.02em] text-ink">
+                  Ready to inspect?
+                </h3>
+                <p className="mt-2 max-w-xs text-[13px] leading-5 text-ink-muted">
+                  Start with the sample, or bring your own repository. No account, token, or write
+                  access required.
+                </p>
+                <div className="mt-5 flex gap-1.5" aria-hidden="true">
+                  <span className="h-1.5 w-1.5 rounded-full bg-line-strong" />
+                  <span className="h-1.5 w-1.5 rounded-full bg-line-strong" />
+                  <span className="h-1.5 w-1.5 rounded-full bg-line-strong" />
+                </div>
+                <div className="mt-6 flex w-full max-w-[260px] flex-col gap-2.5">
+                  <Button
+                    variant="primary"
+                    onClick={openSample}
+                    loading={busy === "sample"}
+                    disabled={busy !== null}
+                    className="h-10 w-full"
+                  >
+                    Try sample repository
+                  </Button>
+                  <Button
+                    variant="secondary"
+                    onClick={() => fileInput.current?.click()}
+                    loading={busy === "upload"}
+                    disabled={busy !== null}
+                    className="h-10 w-full"
+                  >
+                    Upload repository ZIP
+                  </Button>
+                </div>
+                <p className="mt-4 font-mono text-[10px] uppercase tracking-[0.12em] text-ink-faint">
+                  sample or ZIP · no account
+                </p>
+                {provider ? (
+                  <ProviderPill
+                    mode={provider.mode}
+                    message={provider.message}
+                    className="mt-3"
+                  />
+                ) : null}
+              </div>
             </div>
-          </aside>
-        </section>
+          </section>
+        </main>
 
-        {/* Footer */}
-        <footer className="mt-20 border-t border-line pt-6">
-          <div className="flex flex-wrap items-center justify-between gap-3 text-2xs text-ink-faint">
-            <p>
-              RepoScribe is an open-source documentation reliability tool. Findings are evidence-backed; the
-              final decision stays with the developer.
+        <footer className="mt-16 border-t border-line pt-6">
+          <div className="flex flex-col items-center justify-between gap-3 sm:flex-row">
+            <p className="font-hand text-[20px] leading-none text-ink-faint">
+              good docs deserve receipts.
             </p>
-            <p>
-              v0.3.0 · MIT · open source
-            </p>
+            <nav className="flex items-center gap-5 text-[12.5px] text-ink-muted" aria-label="Footer">
+              <a href="#top" className="transition-colors hover:text-ink">
+                Back to top
+              </a>
+              <a
+                href={GITHUB_URL}
+                target="_blank"
+                rel="noreferrer"
+                className="transition-colors hover:text-ink"
+              >
+                GitHub ↗
+              </a>
+              <span className="font-mono text-[10px] uppercase tracking-[0.12em] text-ink-faint">
+                read-only
+              </span>
+            </nav>
           </div>
         </footer>
-      </main>
+      </div>
+
+      {error ? (
+        <div className="fixed inset-x-4 bottom-4 z-50 mx-auto w-auto max-w-lg animate-fade-up sm:bottom-6">
+          <ErrorNotice
+            error={error}
+            onRetry={retryLast}
+            onDismiss={() => setError(null)}
+          />
+        </div>
+      ) : null}
     </div>
   );
 }

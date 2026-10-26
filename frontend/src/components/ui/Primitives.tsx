@@ -7,13 +7,13 @@ import {
   statusMeaning,
 } from "../../lib/format";
 import type { ApiError } from "../../lib/api";
-import type { FindingStatus, Severity } from "../../lib/types";
+import type { FindingStatus, ProviderMode, Severity } from "../../lib/types";
 
 type Variant = "primary" | "secondary" | "ghost" | "danger";
 
 const VARIANTS: Record<Variant, string> = {
   primary:
-    "bg-accent text-white shadow-glow hover:bg-accent-hover hover:shadow-[0_0_0_1px_rgba(124,127,245,0.6),0_0_36px_-8px_rgba(124,127,245,0.7)] disabled:bg-line-strong disabled:text-ink-faint disabled:shadow-none",
+    "bg-accent text-[#03140a] shadow-[0_0_0_1px_rgba(34,197,94,0.28),0_10px_28px_-18px_rgba(34,197,94,0.8)] hover:bg-accent-hover hover:shadow-[0_0_0_1px_rgba(74,222,128,0.42),0_12px_32px_-18px_rgba(74,222,128,0.8)] disabled:bg-line disabled:text-ink-faint disabled:shadow-none",
   secondary:
     "border border-line bg-surface text-ink hover:border-line-strong hover:bg-surface-elevated disabled:text-ink-faint",
   ghost: "text-ink-muted hover:bg-subtle hover:text-ink disabled:text-ink-faint",
@@ -39,7 +39,7 @@ export function Button({
       {...rest}
       disabled={disabled || loading}
       className={cn(
-        "inline-flex items-center justify-center gap-2 rounded-control font-medium transition-all duration-150 disabled:cursor-not-allowed",
+        "inline-flex items-center justify-center gap-2 rounded-control font-semibold tracking-[-0.005em] transition-all duration-150 disabled:cursor-not-allowed",
         sizeCls,
         VARIANTS[variant],
         className,
@@ -63,37 +63,22 @@ export function Spinner({ className }: { className?: string }) {
   );
 }
 
-export function Skeleton({ className }: { className?: string }) {
-  return (
-    <div
-      aria-hidden="true"
-      className={cn(
-        "animate-pulse rounded-[6px] bg-subtle/70 [background-image:linear-gradient(90deg,transparent,rgba(255,255,255,0.04),transparent)] [background-size:200%_100%]",
-        className,
-      )}
-    />
-  );
-}
-
 export function Card({
   children,
   className,
   as: Tag = "section",
   padded = true,
-  glow = false,
 }: {
   children: ReactNode;
   className?: string;
   as?: "section" | "article" | "div";
   padded?: boolean;
-  glow?: boolean;
 }) {
   return (
     <Tag
       className={cn(
         "rounded-panel border border-line bg-surface hairline",
         padded && "p-5",
-        glow && "shadow-accent",
         className,
       )}
     >
@@ -116,32 +101,16 @@ export function CardHeader({
   return (
     <div
       className={cn(
-        "flex flex-wrap items-center justify-between gap-3 border-b border-line px-5 py-3.5",
+        "flex flex-wrap items-center justify-between gap-3 border-b border-line px-5 py-4",
         className,
       )}
     >
       <div className="min-w-0">
         <h3 className="text-h3 text-ink">{title}</h3>
-        {subtitle ? <p className="mt-0.5 text-[12.5px] text-ink-muted">{subtitle}</p> : null}
+        {subtitle ? <p className="mt-1 text-[12.5px] leading-5 text-ink-muted">{subtitle}</p> : null}
       </div>
       {actions ? <div className="flex flex-wrap items-center gap-2">{actions}</div> : null}
     </div>
-  );
-}
-
-export function Divider({ className }: { className?: string }) {
-  return (
-    <div role="separator" aria-orientation="horizontal" className={cn("h-px bg-line", className)} />
-  );
-}
-
-export function DashedDivider({ className }: { className?: string }) {
-  return (
-    <div
-      role="separator"
-      aria-orientation="horizontal"
-      className={cn("dashed-hairline h-px", className)}
-    />
   );
 }
 
@@ -159,16 +128,16 @@ export function Badge({
   const tones: Record<string, string> = {
     neutral: "border-line bg-subtle text-ink-muted",
     accent: "border-accent/30 bg-accent-soft text-accent-strong",
-    ok: "border-ok/30 bg-ok-soft text-ok",
-    warn: "border-warn/30 bg-warn-soft text-warn",
-    danger: "border-danger/30 bg-danger-soft text-danger",
-    info: "border-info/30 bg-info-soft text-info",
+    ok: "border-ok/25 bg-ok-soft text-ok",
+    warn: "border-warn/25 bg-warn-soft text-warn",
+    danger: "border-danger/25 bg-danger-soft text-danger",
+    info: "border-info/25 bg-info-soft text-info",
   };
   return (
     <span
       title={title}
       className={cn(
-        "inline-flex h-5 items-center gap-1 rounded-chip border px-2 text-2xs font-medium leading-none",
+        "inline-flex h-5 items-center gap-1.5 rounded-chip border px-2 text-2xs font-medium leading-none",
         tones[tone],
         className,
       )}
@@ -221,146 +190,73 @@ export function SeverityBadge({ severity }: { severity: Severity }) {
   );
 }
 
-/** A small toggleable pill used for filters and prompt chips. */
-export function Chip({
-  active = false,
-  onClick,
-  children,
+export function ProviderPill({
+  mode,
+  message,
   className,
 }: {
-  active?: boolean;
-  onClick?: () => void;
-  children: ReactNode;
+  mode?: ProviderMode | null;
+  message?: string;
   className?: string;
 }) {
+  if (!mode) return null;
+  const label = mode === "live" ? "live provider" : mode === "unavailable" ? "provider unavailable" : "local demo";
+  const tone =
+    mode === "live"
+      ? "border-ok/25 bg-ok-soft text-ok"
+      : mode === "unavailable"
+        ? "border-danger/25 bg-danger-soft text-danger"
+        : "border-info/25 bg-info-soft text-info";
+  const dot = mode === "live" ? "bg-ok" : mode === "unavailable" ? "bg-danger" : "bg-info";
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-pressed={active}
+    <span
+      title={message}
       className={cn(
-        "inline-flex h-8 items-center gap-1.5 rounded-chip border px-3 text-[12.5px] font-medium transition-colors duration-150",
-        active
-          ? "border-accent/45 bg-accent-soft text-accent-strong"
-          : "border-line bg-surface text-ink-muted hover:border-line-strong hover:text-ink",
+        "inline-flex h-7 items-center gap-1.5 rounded-chip border px-2.5 text-2xs font-medium",
+        tone,
         className,
       )}
     >
-      {active ? (
-        <span aria-hidden="true" className="h-1 w-1 rounded-full bg-accent-strong" />
-      ) : null}
-      {children}
-    </button>
-  );
-}
-
-const SPOTLIGHT_TONES: Record<string, { bg: string; ring: string; dot: string; text: string }> = {
-  accent: {
-    bg: "border-accent/30 bg-accent-soft text-accent-strong",
-    ring: "shadow-[0_0_28px_-8px_rgba(99,102,241,0.6)]",
-    dot: "bg-accent-strong shadow-[0_0_8px_rgba(124,127,245,0.7)]",
-    text: "text-accent-strong",
-  },
-  info: {
-    bg: "border-info/30 bg-info-soft text-info",
-    ring: "shadow-[0_0_28px_-8px_rgba(34,211,238,0.6)]",
-    dot: "bg-info shadow-[0_0_8px_rgba(34,211,238,0.7)]",
-    text: "text-info",
-  },
-  warn: {
-    bg: "border-warn/30 bg-warn-soft text-warn",
-    ring: "shadow-[0_0_28px_-8px_rgba(245,158,11,0.6)]",
-    dot: "bg-warn shadow-[0_0_8px_rgba(245,158,11,0.7)]",
-    text: "text-warn",
-  },
-  ok: {
-    bg: "border-ok/30 bg-ok-soft text-ok",
-    ring: "shadow-[0_0_28px_-8px_rgba(16,185,129,0.6)]",
-    dot: "bg-ok shadow-[0_0_8px_rgba(16,185,129,0.7)]",
-    text: "text-ok",
-  },
-};
-
-/** A glowing colored disc used for the four workflow steps and badge icons. */
-export function Spotlight({ tone, children }: { tone: keyof typeof SPOTLIGHT_TONES; children: ReactNode }) {
-  const t = SPOTLIGHT_TONES[tone];
-  return (
-    <span
-      className={cn(
-        "relative grid h-7 w-7 place-items-center rounded-full border",
-        t.bg,
-        t.ring,
-      )}
-    >
-      <span aria-hidden="true" className={cn("absolute inset-0 m-auto h-1 w-1 rounded-full", t.dot)} />
-      <span className="relative">{children}</span>
+      <span aria-hidden="true" className={cn("h-1 w-1 rounded-full", dot)} />
+      {label}
     </span>
-  );
-}
-
-const OUTCOME_TONE_CLASSES: Record<string, { border: string; bg: string; text: string; dot: string }> = {
-  ok: {
-    border: "border-ok/30",
-    bg: "bg-ok-soft",
-    text: "text-ok",
-    dot: "bg-ok",
-  },
-  warn: {
-    border: "border-warn/30",
-    bg: "bg-warn-soft",
-    text: "text-warn",
-    dot: "bg-warn",
-  },
-  danger: {
-    border: "border-danger/30",
-    bg: "bg-danger-soft",
-    text: "text-danger",
-    dot: "bg-danger",
-  },
-  pulse: {
-    border: "border-line",
-    bg: "bg-surface",
-    text: "text-ink",
-    dot: "bg-info",
-  },
-};
-
-export function StatusPill({
-  tone,
-  children,
-  pulsing = false,
-}: {
-  tone: keyof typeof OUTCOME_TONE_CLASSES;
-  children: ReactNode;
-  pulsing?: boolean;
-}) {
-  const t = OUTCOME_TONE_CLASSES[tone];
-  return (
-    <Badge
-      tone="neutral"
-      className={cn("gap-1.5", t.border, t.bg, t.text)}
-    >
-      <span className="relative inline-block h-1.5 w-1.5">
-        <span className={cn("absolute inset-0 rounded-full", t.dot)} />
-        {pulsing ? <span aria-hidden="true" className="pulse-dot" /> : null}
-      </span>
-      {children}
-    </Badge>
   );
 }
 
 export function ErrorNotice({
   error,
   onRetry,
+  onDismiss,
 }: {
   error: ApiError;
   onRetry?: () => void;
+  onDismiss?: () => void;
 }) {
   return (
     <div
       role="alert"
-      className="rounded-panel border border-danger/30 bg-danger-soft p-4 text-[13px] text-danger hairline"
+      className="relative rounded-panel border border-danger/30 bg-danger-soft p-4 pr-10 text-[13px] text-danger hairline"
     >
+      {onDismiss ? (
+        <button
+          type="button"
+          onClick={onDismiss}
+          aria-label="Dismiss error"
+          className="absolute right-2 top-2 grid h-6 w-6 place-items-center rounded-full text-danger/60 transition-colors hover:bg-danger/10 hover:text-danger"
+        >
+          <svg
+            viewBox="0 0 16 16"
+            className="h-3.5 w-3.5"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.7"
+            strokeLinecap="round"
+            aria-hidden="true"
+          >
+            <path d="M4.5 4.5 11.5 11.5M11.5 4.5 4.5 11.5" />
+          </svg>
+        </button>
+      ) : null}
       <p className="font-medium leading-5">{error.message}</p>
       <p className="mt-1.5 font-mono text-2xs text-danger/70">
         {error.code}
@@ -392,8 +288,8 @@ export function EmptyState({
   icon?: "spark" | "doc" | "shield";
 }) {
   return (
-    <div className="rounded-panel border border-dashed border-line-strong bg-surface/50 px-6 py-14 text-center">
-      <div className="mx-auto mb-3 flex h-9 w-9 items-center justify-center rounded-full border border-line bg-subtle text-ink-muted">
+    <div className="rounded-panel border border-dashed border-line-strong bg-surface/40 px-6 py-14 text-center">
+      <div className="mx-auto mb-4 flex h-11 w-11 items-center justify-center rounded-full border border-line bg-subtle text-ink-muted">
         {icon === "spark" ? (
           <svg viewBox="0 0 16 16" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
             <path d="M8 2v4M8 10v4M2 8h4M10 8h4M4 4l2.5 2.5M9.5 9.5 12 12M4 12l2.5-2.5M9.5 6.5 12 4" />
@@ -429,11 +325,11 @@ export function PageHeader({
   meta?: ReactNode;
 }) {
   return (
-    <header className="flex flex-wrap items-start justify-between gap-4 border-b border-line px-6 py-5 hairline">
+    <header className="flex flex-wrap items-end justify-between gap-5 border-b border-line px-4 py-6 hairline sm:px-6 lg:px-8">
       <div className="min-w-0">
         <h1 className="text-h2 text-ink">{title}</h1>
-        {subtitle ? <p className="body-text mt-1 max-w-2xl">{subtitle}</p> : null}
-        {meta ? <div className="mt-2 text-2xs text-ink-faint">{meta}</div> : null}
+        {subtitle ? <p className="body-text mt-2 max-w-3xl">{subtitle}</p> : null}
+        {meta ? <div className="mt-3 font-mono text-2xs text-ink-faint">{meta}</div> : null}
       </div>
       {actions ? <div className="flex flex-wrap items-center gap-2">{actions}</div> : null}
     </header>
@@ -454,20 +350,26 @@ export function Stat({
   return (
     <div
       className={cn(
-        "rounded-panel border border-line bg-surface px-4 py-4 hairline",
-        emphasis && "shadow-accent border-accent/40",
+        "group relative overflow-hidden rounded-panel border border-line bg-surface px-5 py-5 hairline transition-colors duration-150 hover:border-line-strong",
+        emphasis && "border-accent/25",
       )}
     >
-      <p className="text-2xs font-medium uppercase tracking-[0.08em] text-ink-faint">{label}</p>
+      {emphasis ? (
+        <span
+          aria-hidden="true"
+          className="absolute inset-x-5 top-0 h-px bg-gradient-to-r from-accent/80 via-accent/25 to-transparent"
+        />
+      ) : null}
+      <p className="eyebrow">{label}</p>
       <p
         className={cn(
-          "mt-1.5 text-[28px] font-semibold leading-none tabular-nums tracking-[-0.015em] text-ink",
+          "mt-2 text-[30px] font-semibold leading-none tabular-nums tracking-[-0.03em] text-ink",
           emphasis && "text-gradient",
         )}
       >
         {value}
       </p>
-      {hint ? <p className="mt-1.5 text-2xs text-ink-faint">{hint}</p> : null}
+      {hint ? <p className="mt-2 text-2xs leading-4 text-ink-faint">{hint}</p> : null}
     </div>
   );
 }

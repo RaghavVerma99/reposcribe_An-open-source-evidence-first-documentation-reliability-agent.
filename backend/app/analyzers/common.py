@@ -12,7 +12,7 @@ import re
 from dataclasses import dataclass, field, replace
 from pathlib import Path, PurePosixPath
 
-from app.core.security import is_doc_file, is_excluded, is_secret_path, iter_files
+from app.core.security import is_doc_file, is_excluded, is_secret_path, is_within, iter_files
 
 HEADING_RE = re.compile(r"^(#{1,6})\s+(.+?)\s*#*\s*$")
 LINK_RE = re.compile(r"(?<!!)\[([^\]]*)\]\(\s*([^)\s]+?)(?:\s+[\"'][^\"']*[\"'])?\s*\)")
@@ -69,6 +69,7 @@ class DocLink:
     resolved_path: str | None
     exists: bool
     missing_anchor: bool
+    checkable: bool = True
 
 
 @dataclass(frozen=True)
@@ -216,19 +217,27 @@ def _resolve_link(
         return DocLink(source, line, target, target, "", True, None, True, False)
 
     path_part, _, anchor = target.partition("#")
-    path_part = path_part.split("?", 1)[0]
+    path_part = path_part.split("?", 1)[0].replace("\\", "/")
     anchor = anchor.strip().lower()
 
     if not path_part:
         slug_map = _slug_map(headings)
         return DocLink(source, line, target, target, anchor, False, source, True, bool(anchor and anchor not in slug_map))
 
+    # Site-root links (``/docs/page``) are not repository-relative and must
+    # never be joined to the workspace root; on POSIX that would read outside it.
+    if path_part.startswith("/"):
+        return DocLink(
+            source, line, target, target, anchor, False, None, False, False, checkable=False
+        )
+
     resolved = _resolve_relative(source, path_part)
     if resolved is None:
         return DocLink(source, line, target, target, anchor, False, None, False, False)
 
     absolute = root / resolved
-    exists = absolute.exists()
+    contained = is_within(root, absolute)
+    exists = contained and absolute.exists()
     missing_anchor = False
     if exists and anchor and resolved.lower().endswith((".md", ".markdown")):
         target_doc = docs.get(resolved)
@@ -354,17 +363,29 @@ def _module_name(path: str) -> str:
     return ".".join(parts)
 
 
+def _dotted_name(node: ast.AST) -> str | None:
+    parts: list[str] = []
+    while isinstance(node, ast.Attribute):
+        parts.append(node.attr)
+        node = node.value
+    if not isinstance(node, ast.Name):
+        return None
+    parts.append(node.id)
+    return ".".join(reversed(parts))
+
+
 def _decorator_route(node: ast.AST) -> tuple[str, str, str] | None:
     if not isinstance(node, ast.Call) or not isinstance(node.func, ast.Attribute):
         return None
     base = node.func.value
-    if not isinstance(base, ast.Name):
+    base_name = _dotted_name(base)
+    if base_name is None:
         return None
     attr = node.func.attr
     if attr in METHODS:
         if not node.args or not isinstance(node.args[0], ast.Constant) or not isinstance(node.args[0].value, str):
             return None
-        return base.id, attr.upper(), node.args[0].value
+        return base_name, attr.upper(), node.args[0].value
     if attr == "api_route":
         if not node.args or not isinstance(node.args[0], ast.Constant) or not isinstance(node.args[0].value, str):
             return None
@@ -376,12 +397,17 @@ def _decorator_route(node: ast.AST) -> tuple[str, str, str] | None:
                         methods.append(element.value.upper())
         if not methods:
             return None
-        return base.id, ",".join(sorted(methods)), node.args[0].value
+        return base_name, ",".join(sorted(methods)), node.args[0].value
     return None
 
 
 def _router_prefixes(tree: ast.AST) -> dict[str, tuple[str | None, int]]:
-    """Map router variable -> (prefix or None when unresolvable, declaration line)."""
+    """Map router variable -> (prefix or None when unresolvable, declaration line).
+
+    A prefix is only resolvable when it is a string literal. A variable,
+    f-string, or function call is recorded as ``None`` so every route below it
+    is reported as unresolved instead of being compared as if it were bare.
+    """
     prefixes: dict[str, tuple[str | None, int]] = {}
     for node in ast.walk(tree):
         if not isinstance(node, ast.Assign) or len(node.targets) != 1:
@@ -391,10 +417,13 @@ def _router_prefixes(tree: ast.AST) -> dict[str, tuple[str | None, int]]:
             continue
         func = node.value.func
         if isinstance(func, ast.Name) and func.id == "APIRouter":
-            prefix = ""
+            prefix: str | None = ""
             for keyword in node.value.keywords:
-                if keyword.arg == "prefix" and isinstance(keyword.value, ast.Constant) and isinstance(keyword.value.value, str):
-                    prefix = keyword.value.value
+                if keyword.arg == "prefix":
+                    if isinstance(keyword.value, ast.Constant) and isinstance(keyword.value.value, str):
+                        prefix = keyword.value.value
+                    else:
+                        prefix = None
             prefixes[target.id] = (prefix, node.lineno)
     for node in ast.walk(tree):
         if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute) and node.func.attr == "include_router":
@@ -402,11 +431,15 @@ def _router_prefixes(tree: ast.AST) -> dict[str, tuple[str | None, int]]:
                 name = node.args[0].id
                 extra = ""
                 for keyword in node.keywords:
-                    if keyword.arg == "prefix" and isinstance(keyword.value, ast.Constant) and isinstance(keyword.value.value, str):
-                        extra = keyword.value.value
+                    if keyword.arg == "prefix":
+                        if isinstance(keyword.value, ast.Constant) and isinstance(keyword.value.value, str):
+                            extra = keyword.value.value
+                        else:
+                            prefixes[name] = (None, node.lineno)
+                            break
                 if name in prefixes and prefixes[name][0] is not None:
                     prefixes[name] = ((prefixes[name][0] or "") + extra, prefixes[name][1])
-                else:
+                elif name not in prefixes:
                     prefixes[name] = (None, node.lineno)
     return prefixes
 
@@ -638,3 +671,21 @@ def line_of(text: str, needle: str) -> tuple[int, int] | None:
 
 def is_doc(rel: str) -> bool:
     return is_doc_file(rel) and not is_excluded(rel)
+
+
+# Single source of truth for well-known module roots. Both CHK-05 (symbol
+# reference) and V-5 (introduced references) read from this list so a
+# newly-added stdlib or HTTP library is filtered once and consistently.
+# Keep the list small and obvious: only roots whose absence would otherwise
+# cause false positives in either consumer.
+STDLIB_ROOTS: frozenset[str] = frozenset(
+    {
+        "os", "sys", "re", "json", "typing", "pathlib", "datetime", "logging",
+        "asyncio", "subprocess", "shutil", "zipfile", "ast", "difflib", "hashlib",
+        "math", "time", "uuid", "secrets",
+        "collections", "functools", "itertools", "contextlib",
+        "sqlite3",
+        "fastapi", "pydantic", "uvicorn", "pytest", "httpx",
+        "starlette",
+    }
+)

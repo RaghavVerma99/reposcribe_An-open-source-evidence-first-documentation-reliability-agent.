@@ -4,25 +4,35 @@
 
 :root {
   color-scheme: dark;
-  --canvas: #0a0c1a;
-  --hairline: rgba(255, 255, 255, 0.045);
+  --canvas: #000000;
+  --hairline: rgba(255, 255, 255, 0.06);
 }
 
 html,
 body,
 #root {
-  height: 100%;
+  min-height: 100%;
 }
 
 html {
   background: var(--canvas);
+  scroll-behavior: smooth;
 }
 
 body {
   @apply bg-canvas text-ink antialiased;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
   font-feature-settings: "cv02", "cv03", "cv04", "ss01";
+}
+
+h1,
+h2,
+h3,
+h4 {
+  @apply font-display;
+  text-wrap: balance;
 }
 
 input,
@@ -43,18 +53,17 @@ select:focus-visible,
 summary:focus-visible,
 [tabindex]:focus-visible {
   outline: none;
-  box-shadow: 0 0 0 2px #0a0c1a, 0 0 0 4px rgba(124, 127, 245, 0.32);
-  border-radius: 6px;
+  box-shadow: 0 0 0 2px #000000, 0 0 0 4px rgba(34, 197, 94, 0.42);
 }
 
 ::selection {
-  background: rgba(124, 127, 245, 0.6);
-  color: #ffffff;
+  background: #22c55e;
+  color: #001408;
 }
 
 * {
   scrollbar-width: thin;
-  scrollbar-color: #232a58 transparent;
+  scrollbar-color: #333333 transparent;
 }
 
 *::-webkit-scrollbar {
@@ -67,14 +76,14 @@ summary:focus-visible,
 }
 
 *::-webkit-scrollbar-thumb {
-  background: #232a58;
+  background: #333333;
   border: 2px solid transparent;
   background-clip: content-box;
   border-radius: 999px;
 }
 
 *::-webkit-scrollbar-thumb:hover {
-  background: #2d3470;
+  background: #454545;
   background-clip: content-box;
 }
 
@@ -88,55 +97,54 @@ summary:focus-visible,
   @apply whitespace-pre font-mono text-[12.5px] leading-[20px];
 }
 
-/* Vertical rhythm utility: a single dashed separator. */
-.dashed-hairline {
-  background-image: linear-gradient(
-    to right,
-    theme("colors.line.DEFAULT") 50%,
-    transparent 50%
-  );
-  background-size: 6px 1px;
-  background-repeat: repeat-x;
-  background-position: center;
-}
-
 /* Type rhythm: the standard sentence used across panels. */
 .body-text {
-  @apply text-body leading-6 text-ink-muted;
+  @apply text-body leading-[22px] text-ink-muted;
 }
 
-/* Subtle ambient wash used on the hero only. */
+/* A quiet ambient wash for the landing page. The app stays near-black. */
 .ambient {
   background:
-    radial-gradient(60% 60% at 25% 25%, rgba(99, 102, 241, 0.18), transparent 70%),
-    radial-gradient(55% 70% at 80% 80%, rgba(139, 92, 246, 0.14), transparent 70%);
+    radial-gradient(55% 46% at 50% 0%, rgba(34, 197, 94, 0.1), transparent 72%),
+    radial-gradient(40% 32% at 82% 18%, rgba(56, 189, 248, 0.05), transparent 70%);
+}
+
+.scroll-region {
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+@layer components {
+  .nav-pill {
+    @apply rounded-full px-4 py-2 text-[13px] font-medium text-ink-muted transition-colors duration-150 hover:text-ink;
+  }
+
+  .nav-pill-active {
+    @apply bg-subtle text-ink;
+  }
+
+  .link-button {
+    @apply inline-flex items-center gap-2 rounded-full border border-line bg-surface/50 px-3.5 py-1.5 text-[13px] font-medium text-ink-muted transition-colors duration-150 hover:border-line-strong hover:bg-surface hover:text-ink;
+  }
+
+  .tech-badge {
+    @apply inline-flex items-center gap-2 rounded-full border border-line bg-surface/60 px-3 py-1.5 text-[12.5px] font-medium text-ink-muted transition-colors duration-150 hover:border-line-strong hover:text-ink;
+  }
+
+  .eyebrow {
+    @apply font-mono text-[10.5px] font-medium uppercase tracking-[0.14em] text-ink-faint;
+  }
 }
 
 @layer utilities {
   .text-gradient {
-    background: linear-gradient(135deg, #c4b9ff 0%, #818cf8 45%, #6366f1 100%);
+    background: linear-gradient(120deg, #f7f7f7 0%, #6ee7a0 52%, #22c55e 100%);
     background-clip: text;
     -webkit-background-clip: text;
     color: transparent;
   }
 
-  .text-gradient-violet {
-    background: linear-gradient(135deg, #d8b4fe 0%, #a78bfa 50%, #818cf8 100%);
-    background-clip: text;
-    -webkit-background-clip: text;
-    color: transparent;
-  }
-
-  /* A soft accent underline used for inline emphasis. */
-  .underline-accent {
-    background-image: linear-gradient(90deg, #6366f1 0%, #8b5cf6 100%);
-    background-repeat: no-repeat;
-    background-size: 100% 2px;
-    background-position: 0 100%;
-    padding-bottom: 1px;
-  }
-
-  /* Slow pulse used for status dots on Recent Analyses. */
+  /* Slow pulse used for live status dots. */
   .pulse-dot::after {
     content: "";
     position: absolute;
@@ -164,6 +172,10 @@ summary:focus-visible,
 }
 
 @media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
   *,
   *::before,
   *::after {

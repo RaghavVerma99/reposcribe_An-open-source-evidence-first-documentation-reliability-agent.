@@ -5,17 +5,29 @@ import { useAppState } from "../../app/AppState";
 import { api, ApiError } from "../../lib/api";
 import { relativeTime } from "../../lib/format";
 import { useShell } from "../../lib/shell";
-import { Badge, Button, Card, CardHeader, ErrorNotice, PageHeader } from "../../components/ui/Primitives";
+import { usePageTitle } from "../../lib/usePageTitle";
+import {
+  Button,
+  Card,
+  CardHeader,
+  ErrorNotice,
+  PageHeader,
+  ProviderPill,
+} from "../../components/ui/Primitives";
+
+const ROW_LABEL = "text-ink-faint";
+const ROW_VALUE = "min-w-0 truncate font-mono text-ink";
 
 export default function SettingsPage() {
   const { repository, reloadRepository } = useShell();
-  const { provider, providerError, reloadProvider, setRepositoryId } = useAppState();
+  const { provider, providerError, reloadProvider } = useAppState();
   const navigate = useNavigate();
   const [confirming, setConfirming] = useState(false);
   const [reindexBusy, setReindexBusy] = useState(false);
   const [reindexError, setReindexError] = useState<ApiError | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<ApiError | null>(null);
+  usePageTitle(`${repository.name} settings`);
 
   async function reindex() {
     setReindexBusy(true);
@@ -35,7 +47,6 @@ export default function SettingsPage() {
     setError(null);
     try {
       await api.deleteRepository(repository.id);
-      setRepositoryId(null);
       navigate("/");
     } catch (caught) {
       setError(caught as ApiError);
@@ -61,90 +72,98 @@ export default function SettingsPage() {
         actions={<Button onClick={reloadProvider}>Refresh status</Button>}
       />
 
-      <div className="grid gap-6 p-6 xl:grid-cols-2">
+      <div className="grid gap-6 p-4 sm:p-6 lg:p-8 xl:grid-cols-2">
         <Card padded={false} className="overflow-hidden">
           <CardHeader
             title="Model provider"
+            subtitle="Credentials live in the backend environment and never reach the browser."
             actions={
               provider ? (
-                <Badge tone={provider.mode === "live" ? "ok" : provider.mode === "unavailable" ? "danger" : "info"}>
-                  <span
-                    aria-hidden="true"
-                    className={
-                      provider.mode === "live"
-                        ? "h-1 w-1 rounded-full bg-ok"
-                        : provider.mode === "unavailable"
-                          ? "h-1 w-1 rounded-full bg-danger"
-                          : "h-1 w-1 rounded-full bg-info"
-                    }
-                  />
-                  {provider.mode}
-                </Badge>
+                <ProviderPill mode={provider.mode} message={provider.message} />
               ) : null
             }
           />
-          <div className="space-y-2 p-5 text-[13px]">
+          <div className="space-y-4 p-5">
             {providerError ? <ErrorNotice error={providerError} onRetry={reloadProvider} /> : null}
             {provider ? (
               <>
-                <dl className="grid grid-cols-[140px_1fr] gap-y-2 text-2xs">
-                  <dt className="text-ink-faint">Provider</dt>
-                  <dd className="font-mono text-ink">{provider.provider}</dd>
-                  <dt className="text-ink-faint">Model</dt>
-                  <dd className="font-mono text-ink">{provider.model}</dd>
-                  <dt className="text-ink-faint">State</dt>
+                <dl className="grid grid-cols-[132px_1fr] gap-x-4 gap-y-2.5 text-2xs">
+                  <dt className={ROW_LABEL}>Provider</dt>
+                  <dd className={ROW_VALUE}>{provider.provider}</dd>
+                  <dt className={ROW_LABEL}>Model</dt>
+                  <dd className={ROW_VALUE}>{provider.model}</dd>
+                  <dt className={ROW_LABEL}>State</dt>
                   <dd className="text-ink">{provider.state.replace(/_/g, " ")}</dd>
-                  <dt className="text-ink-faint">Contract verified</dt>
+                  <dt className={ROW_LABEL}>Contract verified</dt>
                   <dd className="text-ink">{provider.verified_contract ? "yes" : "no"}</dd>
                 </dl>
-                <p className="body-text">{provider.message}</p>
+                <p className="rounded-control border border-line bg-canvas px-3 py-2.5 text-2xs leading-5 text-ink-muted">
+                  {provider.message}
+                </p>
               </>
             ) : (
               <p className="text-2xs text-ink-muted">Loading provider status…</p>
             )}
-            <p className="border-t border-line pt-3 text-2xs text-ink-faint">
-              Deterministic checks run without any provider. Credentials live in the backend environment only and are
-              never exposed to the browser.
+            <p className="border-t border-line pt-3 text-2xs leading-5 text-ink-faint">
+              Deterministic checks run without any provider. The model explains and drafts; it never
+              decides whether a finding is true.
             </p>
           </div>
         </Card>
 
         <Card padded={false} className="overflow-hidden">
-          <CardHeader title="Workspace" />
-          <div className="space-y-2 p-5 text-[13px]">
-            <dl className="grid grid-cols-[140px_1fr] gap-y-2 text-2xs">
-              <dt className="text-ink-faint">Repository id</dt>
-              <dd className="font-mono text-ink">{repository.id}</dd>
-              <dt className="text-ink-faint">Name</dt>
-              <dd className="text-ink">{repository.name}</dd>
-              <dt className="text-ink-faint">Source</dt>
-              <dd className="text-ink">{repository.source === "sample" ? "Bundled sample" : "Uploaded ZIP"}</dd>
-              <dt className="text-ink-faint">Files indexed</dt>
+          <CardHeader
+            title="Workspace"
+            subtitle="The indexed snapshot is read-only. Re-indexing refreshes it from the original source."
+          />
+          <div className="space-y-4 p-5">
+            <dl className="grid grid-cols-[132px_1fr] gap-x-4 gap-y-2.5 text-2xs">
+              <dt className={ROW_LABEL}>Repository id</dt>
+              <dd className={ROW_VALUE}>{repository.id}</dd>
+              <dt className={ROW_LABEL}>Name</dt>
+              <dd className="min-w-0 truncate text-ink">{repository.name}</dd>
+              <dt className={ROW_LABEL}>Source</dt>
+              <dd className="text-ink">
+                {repository.source === "sample" ? "Bundled sample" : "Uploaded ZIP"}
+              </dd>
+              <dt className={ROW_LABEL}>Files indexed</dt>
               <dd className="text-ink">{repository.files_indexed}</dd>
-              <dt className="text-ink-faint">Documentation files</dt>
+              <dt className={ROW_LABEL}>Documentation files</dt>
               <dd className="text-ink">{repository.docs_found}</dd>
-              <dt className="text-ink-faint">Created</dt>
+              <dt className={ROW_LABEL}>Created</dt>
               <dd className="text-ink">{relativeTime(repository.created_at)}</dd>
             </dl>
-            <div className="flex flex-wrap gap-2 border-t border-line pt-3">
+            <div className="flex flex-wrap items-center gap-3 border-t border-line pt-4">
               <Button loading={reindexBusy} onClick={reindex}>
                 Re-index files
               </Button>
-              <p className="self-center text-2xs text-ink-faint">
+              <p className="max-w-xs text-2xs leading-5 text-ink-faint">
                 Workspaces expire automatically so uploaded code is not kept indefinitely.
               </p>
             </div>
-            {reindexError ? <div className="pt-3"><ErrorNotice error={reindexError} onRetry={reindex} /></div> : null}
+            {reindexError ? (
+              <ErrorNotice
+                error={reindexError}
+                onRetry={reindex}
+                onDismiss={() => setReindexError(null)}
+              />
+            ) : null}
           </div>
         </Card>
 
-        <Card padded={false} className="overflow-hidden xl:col-span-2">
-          <CardHeader title="Delete workspace" />
-          <div className="space-y-3 p-5">
-            {error ? <ErrorNotice error={error} /> : null}
-            <p className="body-text">
-              Deleting removes the extracted copy and every finding, patch, and answer recorded for this repository.
-              Your original repository is not affected.
+        <Card
+          padded={false}
+          className="overflow-hidden border-danger/25 xl:col-span-2"
+        >
+          <CardHeader
+            title="Delete workspace"
+            subtitle="This removes the extracted copy and everything RepoScribe recorded for it."
+          />
+          <div className="space-y-4 p-5">
+            {error ? <ErrorNotice error={error} onDismiss={() => setError(null)} /> : null}
+            <p className="body-text max-w-2xl">
+              Deleting removes the extracted copy and every finding, patch, and answer recorded for
+              this repository. Your original repository is not affected.
             </p>
             {confirming ? (
               <div className="flex flex-wrap items-center gap-3">

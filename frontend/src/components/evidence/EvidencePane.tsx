@@ -9,6 +9,16 @@ const ROLE_TONES: Record<string, "info" | "accent" | "neutral" | "warn"> = {
   other: "neutral",
 };
 
+function WindowDots() {
+  return (
+    <span aria-hidden="true" className="flex shrink-0 items-center gap-1.5">
+      <span className="h-2 w-2 rounded-full bg-[#ff5f56]" />
+      <span className="h-2 w-2 rounded-full bg-[#ffbd2e]" />
+      <span className="h-2 w-2 rounded-full bg-[#27c93f]" />
+    </span>
+  );
+}
+
 export function CodeSnippet({ lines, highlight }: { lines: string[]; highlight?: { from: number; to: number } }) {
   const start = highlight?.from ?? 1;
   return (
@@ -19,7 +29,10 @@ export function CodeSnippet({ lines, highlight }: { lines: string[]; highlight?:
             const number = start + index;
             const marked = highlight ? number >= highlight.from && number <= highlight.to : false;
             return (
-              <tr key={`${number}-${index}`} className={marked ? "bg-warn-soft/70" : undefined}>
+              <tr
+                key={`${number}-${index}`}
+                className={marked ? "border-l-2 border-l-accent/60 bg-accent/[0.07]" : "border-l-2 border-l-transparent"}
+              >
                 <td className="w-12 select-none border-r border-line px-2 py-[3px] text-right align-top font-mono text-2xs text-ink-faint">
                   {number}
                 </td>
@@ -44,7 +57,8 @@ export function EvidencePane({ item }: { item: EvidenceRef }) {
   return (
     <Card padded={false} className="overflow-hidden">
       <div className="flex flex-wrap items-center justify-between gap-2 border-b border-line px-3.5 py-2.5">
-        <div className="flex min-w-0 items-center gap-2">
+        <div className="flex min-w-0 items-center gap-2.5">
+          <WindowDots />
           <Badge tone={ROLE_TONES[item.role] ?? "neutral"}>{item.role}</Badge>
           <span className="truncate font-mono text-2xs text-ink-muted" title={item.path}>
             {item.path}

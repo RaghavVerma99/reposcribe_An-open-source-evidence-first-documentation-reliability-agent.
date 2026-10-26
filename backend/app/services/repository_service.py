@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import hashlib
 import shutil
 import uuid
 from pathlib import Path
@@ -10,7 +9,7 @@ from pathlib import Path
 from app.analyzers.common import RepoIndex, build_index
 from app.analyzers.registry import CHECKS_SUPPORTED
 from app.core.errors import AppError
-from app.core.security import is_doc_file, is_secret_path, iter_files, safe_extract_zip
+from app.core.security import is_doc_file, iter_files, safe_extract_zip
 from app.core.settings import Settings
 from app.schemas.models import ManifestEntry, Repository, RepositoryOverview, RouteInfo
 from app.services.store import RepositoryState, Store, new_workspace, utcnow
@@ -116,7 +115,7 @@ class RepositoryService:
             state.index = build_index(state.root)
             state.indexed_at = utcnow()
             state.status = "ready"
-            state.limitations = [f"{path}: {reason}" for path, reason in state.index.skipped]
+            state.scan_limitations = [f"{path}: {reason}" for path, reason in state.index.skipped]
             return state.index
         except Exception as exc:  # pragma: no cover - defensive
             state.status = "failed"
@@ -132,8 +131,6 @@ class RepositoryService:
                     size=size,
                     language=language,
                     is_doc=is_doc_file(rel),
-                    secret=is_secret_path(rel),
-                    sha256=_sha256(absolute),
                 )
             )
         return entries
@@ -165,6 +162,12 @@ class RepositoryService:
         by_status: dict[str, int] = {}
         for finding in state.findings.values():
             by_status[finding.status] = by_status.get(finding.status, 0) + 1
+        # Limitations surfaced by the scan step are listed first because they
+        # describe the repository workspace itself; check caveats come after.
+        combined_limitations = (
+            [f"[scan] {m}" for m in state.scan_limitations]
+            + [f"[check] {m}" for m in state.check_limitations]
+        )
         return RepositoryOverview(
             repository_id=state.id,
             name=state.name,
@@ -190,7 +193,7 @@ class RepositoryService:
             findings_by_status=by_status,
             last_audit_at=_last_audit(state),
             indexed_at=state.indexed_at,
-            limitations=list(state.limitations),
+            limitations=combined_limitations,
         )
 
 
@@ -199,14 +202,6 @@ def _language(rel: str) -> str:
     if name == "Dockerfile":
         return "Dockerfile"
     return LANGUAGES.get(Path(name).suffix.lower(), "Other")
-
-
-def _sha256(path: Path) -> str:
-    digest = hashlib.sha256()
-    with open(path, "rb") as handle:
-        for chunk in iter(lambda: handle.read(65536), b""):
-            digest.update(chunk)
-    return digest.hexdigest()
 
 
 def _safe_name(filename: str | None) -> str:
