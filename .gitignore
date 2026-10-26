@@ -1,0 +1,30 @@
+# Secrets and local configuration
+.env
+.env.*
+!.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.egg-info/
+build/
+dist/
+
+# Node
+node_modules/
+frontend/dist/
+npm-debug.log*
+
+# RepoScribe workspaces
+.reposcribe-workspaces/
+
+# Editors and OS
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
