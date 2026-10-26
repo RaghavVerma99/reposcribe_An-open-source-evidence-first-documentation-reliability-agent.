@@ -2,7 +2,7 @@ import { Link, Route, Routes } from "react-router-dom";
 
 import AppShell from "../components/layout/AppShell";
 import OverviewPage from "../features/repositories/OverviewPage";
-import Crippled from "../components/ui/Crippled";
+import Notice from "../components/ui/Notice";
 import FindingsPage from "../features/audits/FindingsPage";
 import FindingDetailPage from "../features/audits/FindingDetailPage";
 import PatchPage from "../features/patches/PatchPage";
@@ -25,11 +25,11 @@ export default function App() {
       <Route
         path="*"
         element={
-          <Crippled
+          <Notice
             title="Page not found"
             body="That route does not exist in RepoScribe."
             action={
-              <Link to="/" className="text-sm font-medium text-accent hover:underline">
+              <Link to="/" className="text-[13px] font-medium text-accent-strong hover:underline">
                 Back to the start
               </Link>
             }

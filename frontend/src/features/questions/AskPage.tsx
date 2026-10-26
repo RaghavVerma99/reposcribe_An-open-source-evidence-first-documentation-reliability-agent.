@@ -54,9 +54,28 @@ export default function AskPage() {
       <PageHeader
         title="Ask RepoScribe"
         subtitle="Answers are limited to the inspected snapshot. Every citation points at a real retrieved excerpt."
+        meta={
+          <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
+            <span className="font-mono text-ink">{repository.name}</span>
+            <span aria-hidden="true" className="text-line-strong">
+              ·
+            </span>
+            <span className="font-mono text-ink">{repository.id}</span>
+          </span>
+        }
         actions={
           provider ? (
             <Badge tone={provider.mode === "live" ? "ok" : providerUnavailable ? "danger" : "info"}>
+              <span
+                aria-hidden="true"
+                className={
+                  provider.mode === "live"
+                    ? "h-1 w-1 rounded-full bg-ok"
+                    : providerUnavailable
+                      ? "h-1 w-1 rounded-full bg-danger"
+                      : "h-1 w-1 rounded-full bg-info"
+                }
+              />
               {provider.mode === "live" ? "live provider" : providerUnavailable ? "provider unavailable" : "local demo mode"}
             </Badge>
           ) : null
@@ -64,7 +83,7 @@ export default function AskPage() {
       />
 
       <div className="space-y-6 p-6">
-        <Card className="p-4">
+        <Card className="px-5 py-4">
           <form
             onSubmit={(event) => {
               event.preventDefault();
@@ -94,7 +113,7 @@ export default function AskPage() {
                 key={example}
                 type="button"
                 onClick={() => void submit(example)}
-                className="rounded-full border border-line bg-subtle px-3 py-1 text-2xs text-ink-muted hover:border-line-strong hover:text-ink"
+                className="inline-flex h-7 items-center rounded-chip border border-line bg-surface px-3 text-2xs text-ink-muted transition-colors hover:border-line-strong hover:text-ink"
               >
                 {example}
               </button>
@@ -109,20 +128,22 @@ export default function AskPage() {
         </Card>
 
         {!exchanges.length ? (
-          <div className="rounded-panel border border-dashed border-line-strong bg-surface p-6 text-sm text-ink-muted">
-            Ask a question to search the indexed snapshot. If nothing supports an answer, RepoScribe says so instead of
-            guessing.
-          </div>
+          <Card className="px-5 py-12 text-center">
+            <p className="body-text">
+              Ask a question to search the indexed snapshot. If nothing supports an answer, RepoScribe says so instead of
+              guessing.
+            </p>
+          </Card>
         ) : null}
 
         <div className="space-y-4">
           {exchanges.map((exchange, index) => (
-            <Card key={`${exchange.question}-${index}`} className="p-4">
-              <p className="text-sm font-semibold text-ink">{exchange.question}</p>
+            <Card key={`${exchange.question}-${index}`} className="px-5 py-4">
+              <p className="text-h3 text-ink">{exchange.question}</p>
 
               {!exchange.answer && !exchange.error ? (
                 <p className="mt-3 flex items-center gap-2 text-2xs text-ink-muted">
-                  <Spinner className="text-accent" /> Retrieving evidence…
+                  <Spinner className="text-accent-strong" /> Retrieving evidence…
                 </p>
               ) : null}
 
@@ -134,16 +155,21 @@ export default function AskPage() {
 
               {exchange.answer ? (
                 <div className="mt-3 space-y-3">
-                  <pre className="whitespace-pre-wrap font-sans text-[13px] leading-6 text-ink">{exchange.answer.answer}</pre>
+                  <pre className="whitespace-pre-wrap font-sans text-[13.5px] leading-6 text-ink">
+                    {exchange.answer.answer}
+                  </pre>
 
                   {exchange.answer.citations.length ? (
                     <div>
-                      <p className="text-2xs font-medium uppercase tracking-wide text-ink-faint">Citations</p>
+                      <p className="text-2xs font-medium uppercase tracking-[0.08em] text-ink-faint">Citations</p>
                       <ul className="mt-2 space-y-2">
                         {exchange.answer.citations.map((citation, citationIndex) => (
-                          <li key={`${citation.path}-${citationIndex}`} className="rounded-control border border-line">
+                          <li
+                            key={`${citation.path}-${citationIndex}`}
+                            className="rounded-control border border-line hairline"
+                          >
                             <details>
-                              <summary className="cursor-pointer px-3 py-2 text-2xs text-ink">
+                              <summary className="cursor-pointer px-3 py-2 text-2xs text-ink hover:bg-subtle/60">
                                 <span className="font-mono">{citation.path}</span>
                                 <span className="ml-2 text-ink-faint">
                                   L{citation.start_line}–{citation.end_line}
@@ -158,7 +184,9 @@ export default function AskPage() {
                       </ul>
                     </div>
                   ) : (
-                    <p className="text-2xs text-warn">No retrieved evidence supported an answer to this question.</p>
+                    <p className="text-2xs text-warn">
+                      No retrieved evidence supported an answer to this question.
+                    </p>
                   )}
 
                   {exchange.answer.limitations.length ? (
@@ -176,7 +204,7 @@ export default function AskPage() {
                           key={suggestion}
                           type="button"
                           onClick={() => void submit(suggestion)}
-                          className="rounded-full border border-line bg-subtle px-2.5 py-1 text-2xs text-ink-muted hover:text-ink"
+                          className="inline-flex h-7 items-center rounded-chip border border-line bg-surface px-2.5 text-2xs text-ink-muted transition-colors hover:border-line-strong hover:text-ink"
                         >
                           {suggestion}
                         </button>
@@ -192,7 +220,7 @@ export default function AskPage() {
         <p className="text-2xs text-ink-faint">
           Repository text is treated as untrusted data. Instructions inside a README cannot change what RepoScribe is
           allowed to do.{" "}
-          <Link to={`/r/${repository.id}/settings`} className="text-accent hover:underline">
+          <Link to={`/r/${repository.id}/settings`} className="text-accent-strong hover:underline">
             Review provider settings
           </Link>
         </p>

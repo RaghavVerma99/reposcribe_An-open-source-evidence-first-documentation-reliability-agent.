@@ -52,14 +52,23 @@ export default function FindingsPage() {
       <PageHeader
         title="Audit findings"
         subtitle="Severity is likely impact. Status is how strongly the evidence supports the finding. They are independent."
+        meta={
+          <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
+            <span className="font-mono text-ink">{repository.name}</span>
+            <span aria-hidden="true" className="text-line-strong">
+              ·
+            </span>
+            <span className="font-mono">{repository.id}</span>
+          </span>
+        }
       />
 
       <FilterBar filters={filters} onChange={setFilters} total={page.state.data?.total ?? 0} />
 
       <div className="space-y-3 p-6">
         {page.state.status === "loading" ? (
-          <div className="flex items-center gap-2 text-sm text-ink-muted">
-            <Spinner className="text-accent" /> Loading findings…
+          <div className="flex items-center gap-2 text-[13px] text-ink-muted">
+            <Spinner className="text-accent-strong" /> Loading findings…
           </div>
         ) : null}
 
@@ -103,6 +112,7 @@ export default function FindingsPage() {
             </>
           ) : hasAudit ? (
             <EmptyState
+              icon="doc"
               title="No findings match these filters"
               body="Clear the filters to see every finding from the last audit, or run a new audit to re-check the current snapshot."
               action={
@@ -111,12 +121,13 @@ export default function FindingsPage() {
             />
           ) : (
             <EmptyState
+              icon="spark"
               title="No audit has run for this repository yet"
               body="Run an audit from the top bar to check internal links, routes, configuration references, and documentation rules."
               action={
                 <Link
                   to={`/r/${repository.id}`}
-                  className="inline-flex h-8 items-center rounded-control bg-accent px-3 text-[13px] font-medium text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.14)] transition-colors hover:bg-accent-hover"
+                  className="inline-flex h-8 items-center rounded-control bg-accent px-3 text-[13px] font-medium text-white transition-all hover:bg-accent-hover hover:shadow-glow"
                 >
                   Go to overview
                 </Link>

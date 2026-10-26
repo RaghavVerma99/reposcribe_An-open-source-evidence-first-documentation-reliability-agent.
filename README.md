@@ -7,9 +7,11 @@ prepares a minimal Markdown repair that you review, validate, and export.
 **Screenshot / recording:** not committed in this build. Record one locally with the demo script in
 `docs/demo-script.md` before publishing; do not add placeholder media.
 
-**Current status:** MVP (`v1.0`) implemented and tested. Model-assisted phrasing runs in a clearly labelled
+**Current status:** MVP (`v0.3.0`) implemented and tested. Model-assisted phrasing runs in a clearly labelled
 local demo mode. The Alan adapter is present but disabled until the integration contract is verified — see
 [Alan integration](#alan-ai-integration).
+**Open issues and what got into each release** are tracked in [`docs/audit-2026-10.md`](docs/audit-2026-10.md).
+`v1.0` is reserved for the milestone defined there (zero High/Medium open, a benchmark with measured numbers).
 
 ---
 
@@ -180,8 +182,11 @@ timing figures are published here.** Product claims must not precede measured nu
 
 ## Known limitations
 
+A categorized list of open audit findings, with severities and where to fix them, lives in
+[`docs/audit-2026-10.md`](docs/audit-2026-10.md). The product-level facts worth keeping in this README are:
+
 - Python and FastAPI only, and only statically resolvable decorator routes. Dynamic registration is reported as
-  inconclusive rather than absent.
+  inconclusive rather than absent, never as missing.
 - Route, symbol, and configuration checks are deliberately conservative and default to `needs_review`.
 - Automatic patch generation is implemented for route, internal-link, and symbol findings. Other findings need a
   human.

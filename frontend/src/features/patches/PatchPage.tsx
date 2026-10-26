@@ -8,7 +8,7 @@ import { DiffSummary, DiffViewer, ValidationChecklist } from "../../components/d
 import { Badge, Button, Card, ErrorNotice, PageHeader, Spinner } from "../../components/ui/Primitives";
 
 const downloadClass =
-  "inline-flex h-8 items-center rounded-control border border-line bg-surface px-3 text-[13px] font-medium text-ink transition-colors hover:border-line-strong hover:bg-subtle";
+  "inline-flex h-8 items-center rounded-control border border-line bg-surface px-3 text-[13px] font-medium text-ink transition-colors hover:border-line-strong hover:bg-surface-elevated";
 
 export default function PatchPage() {
   const { repository } = useShell();
@@ -33,8 +33,8 @@ export default function PatchPage() {
 
   if (detail.state.status === "loading") {
     return (
-      <div className="flex items-center gap-2 p-8 text-sm text-ink-muted">
-        <Spinner className="text-accent" /> Loading patchâ€¦
+      <div className="flex items-center gap-2 p-8 text-[13px] text-ink-muted">
+        <Spinner className="text-accent-strong" /> Loading patch…
       </div>
     );
   }
@@ -43,8 +43,8 @@ export default function PatchPage() {
     return (
       <div className="p-6">
         {detail.state.error ? <ErrorNotice error={detail.state.error} onRetry={detail.reload} /> : null}
-        <p className="mt-4 text-sm text-ink-muted">
-          <Link to={`/r/${repository.id}/findings`} className="font-medium text-accent hover:underline">
+        <p className="mt-4 text-[13px] text-ink-muted">
+          <Link to={`/r/${repository.id}/findings`} className="font-medium text-accent-strong hover:underline">
             Back to findings
           </Link>
         </p>
@@ -59,10 +59,25 @@ export default function PatchPage() {
     <div>
       <PageHeader
         title="Patch review"
-        subtitle={`Target: ${patch.target_path} Â· finding ${patch.finding_id}`}
+        subtitle={
+          <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
+            <span className="font-mono text-ink-muted">{patch.target_path}</span>
+            <span aria-hidden="true" className="text-line-strong">
+              ·
+            </span>
+            finding <span className="font-mono text-ink-muted">{patch.finding_id}</span>
+            <span aria-hidden="true" className="text-line-strong">
+              ·
+            </span>
+            <span className="font-mono text-ink-muted">{repository.name}</span>
+          </span>
+        }
         actions={
           <>
-            <Link to={`/r/${repository.id}/findings/${patch.finding_id}`} className={downloadClass}>
+            <Link
+              to={`/r/${repository.id}/findings/${patch.finding_id}`}
+              className={downloadClass}
+            >
               View finding
             </Link>
             <Button variant="primary" onClick={validate} loading={validating}>
@@ -89,14 +104,14 @@ export default function PatchPage() {
           )}
         </div>
 
-        <Card className="p-4">
-          <h2 className="text-[13px] font-semibold tracking-tight text-ink">Rationale</h2>
-          <p className="mt-2 text-sm text-ink-muted">{patch.rationale}</p>
+        <Card className="px-5 py-4">
+          <h2 className="text-h3 text-ink">Rationale</h2>
+          <p className="body-text mt-2">{patch.rationale}</p>
           {patch.limitations.length ? (
             <ul className="mt-3 space-y-1.5 text-2xs text-ink-muted">
               {patch.limitations.map((limitation, index) => (
                 <li key={index} className="flex gap-2">
-                  <span aria-hidden="true">â€¢</span>
+                  <span aria-hidden="true">•</span>
                   <span>{limitation}</span>
                 </li>
               ))}
@@ -105,15 +120,15 @@ export default function PatchPage() {
         </Card>
 
         <section>
-          <h2 className="mb-3 text-[13px] font-semibold tracking-tight text-ink">Proposed change</h2>
+          <h2 className="mb-3 text-h3 text-ink">Proposed change</h2>
           <DiffViewer diff={patch.diff} />
         </section>
 
         <ValidationChecklist result={existingValidation} />
 
-        <Card className="p-4">
-          <h2 className="text-[13px] font-semibold tracking-tight text-ink">Export</h2>
-          <p className="mt-2 text-2xs text-ink-muted">
+        <Card className="px-5 py-4">
+          <h2 className="text-h3 text-ink">Export</h2>
+          <p className="body-text mt-2">
             The original repository is untouched. Download the patch for review, or the revised Markdown to apply
             yourself.
           </p>

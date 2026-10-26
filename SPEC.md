@@ -5,12 +5,12 @@
 | Project | RepoScribe |
 | Tagline | Documentation that doesn't lie. |
 | Document | Product requirements + technical architecture + delivery plan |
-| Version | 2.1 |
-| Status | Implemented — v1.0 built and tested; Alan integration pending verification |
+| Version | 2.2 |
+| Status | Implemented. Latest shipped tag: **v0.3.0** (which includes v0.2.0 honesty fixes plus endpoint-contract hardening). v1.0 is reserved for the milestone defined in §Roadmap. |
 | Owner | risshu.verma7@gmail.com |
 | Last updated | 2026-10-26 |
 | Supersedes | `docs/archive/RepoScribe_Complete_Technical_Spec_v1.md` |
-| Target release | v1.0 (MVP, solo build, hackathon submission) |
+| Target release | Latest shipped tag is **v0.3.0**; v1.0 reserved for the milestone defined in the audit doc |
 
 ---
 
@@ -865,7 +865,7 @@ Additions beyond the original contract, added to close gaps: audit-status pollin
 | Timestamps | ISO 8601 UTC |
 | Errors | `{ "error": { "code", "message", "request_id", "retryable" } }` |
 | Auth | Anonymous session cookie (`HttpOnly`, `SameSite=Lax`, `Secure` in production); workspaces are scoped to the session |
-| Rate limits | 120 requests/min/session across `/api/v1` → 429 with `Retry-After` |
+| Rate limits | 120 requests/min/session across `/api/v1`, excluding `/api/v1/health` and `/api/v1/provider` (liveness and status polls) → 429 with `Retry-After` |
 
 The shipped build applies one global per-session limit rather than a separate audit limit; a dedicated audit quota is deferred.
 
@@ -1491,3 +1491,4 @@ Do not build these before users validate the core workflow.
 | 1.0 | — | Original implementation brief (`docs/archive/RepoScribe_Complete_Technical_Spec_v1.md`) |
 | 2.0 | 2026-10-26 | Restructured into five parts; added requirement IDs, check catalog, measurable NFRs, API error taxonomy and missing endpoints, identifier scheme, state matrix, traceability, risk and decision registers, test IDs; converted ad-hoc lists and ASCII tables to Markdown tables; resolved the API-versioning and session-model gaps by recorded decision. No requirement intent removed. |
 | 2.1 | 2026-10-26 | Aligned the document with the shipped build: module map, analyzer contracts, API success codes, rate-limit and long-running behaviour, error codes (`patch_not_available`, `audit_not_found`), decision-log resolutions, per-phase shipped status, and the real test and build commands. |
+| 2.2 | 2026-10-26 | **v0.3.0**: rate limit excludes `/health` and `/provider`; findings filters validated against `Literal[...]` so invalid values return 422; cursor validated as a non-negative integer (also 422 on garbage); /health probes workspace writability once per process; version string synced to `0.2.0` across `pyproject.toml`, `package.json`, FastAPI metadata, `/health.version`, README, and SPEC. See `docs/audit-2026-10.md`. |

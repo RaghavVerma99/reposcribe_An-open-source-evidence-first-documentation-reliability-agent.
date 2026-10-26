@@ -42,8 +42,8 @@ export function EvidencePane({ item }: { item: EvidenceRef }) {
       ? { from: item.start_line, to: item.end_line }
       : undefined;
   return (
-    <Card className="overflow-hidden">
-      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-line px-3 py-2">
+    <Card padded={false} className="overflow-hidden">
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-line px-3.5 py-2.5">
         <div className="flex min-w-0 items-center gap-2">
           <Badge tone={ROLE_TONES[item.role] ?? "neutral"}>{item.role}</Badge>
           <span className="truncate font-mono text-2xs text-ink-muted" title={item.path}>
@@ -68,7 +68,7 @@ export function EvidencePane({ item }: { item: EvidenceRef }) {
 export function EvidenceList({ evidence }: { evidence: EvidenceRef[] }) {
   if (!evidence.length) {
     return (
-      <div className="rounded-panel border border-dashed border-line-strong bg-surface px-4 py-6 text-center text-[13px] text-ink-muted">
+      <div className="rounded-panel border border-dashed border-line-strong bg-surface px-4 py-8 text-center text-[13px] text-ink-muted">
         No file evidence is attached to this finding.
       </div>
     );

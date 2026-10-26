@@ -2,9 +2,13 @@
 
 from __future__ import annotations
 
+from typing import Annotated, Literal
+
 from fastapi import APIRouter, Depends, Query, Request
 
 from app.api.deps import repo_or_404
+from app.analyzers.registry import CHECKS_SUPPORTED
+from app.core.errors import AppError
 from app.schemas.models import Finding, FindingPage, FindingStatusUpdate
 from app.services.audit_service import AuditService
 
@@ -12,17 +16,23 @@ router = APIRouter(prefix="/repositories/{repository_id}/findings", tags=["findi
 SERVICE = AuditService()
 SEVERITY_ORDER = {"high": 0, "medium": 1, "low": 2, "info": 3}
 
+FindingStatusParam = Literal[
+    "verified", "needs_review", "insufficient_evidence", "resolved", "dismissed"
+]
+SeverityParam = Literal["high", "medium", "low", "info"]
+CheckIdParam = Literal[tuple(CHECKS_SUPPORTED)]  # type: ignore[valid-type]
+
 
 @router.get("", response_model=FindingPage)
 def list_findings(
     request: Request,
     repository_id: str,
-    status: str | None = Query(default=None),
-    severity: str | None = Query(default=None),
-    check_id: str | None = Query(default=None),
-    q: str | None = Query(default=None, max_length=200),
-    limit: int = Query(default=50, ge=1, le=200),
-    cursor: str | None = Query(default=None),
+    status: FindingStatusParam | None = Query(default=None),
+    severity: SeverityParam | None = Query(default=None),
+    check_id: CheckIdParam | None = Query(default=None),
+    q: Annotated[str | None, Query(max_length=200)] = None,
+    limit: Annotated[int, Query(ge=1, le=200)] = 50,
+    cursor: Annotated[int | None, Query(ge=0)] = None,
 ) -> FindingPage:
     state = repo_or_404(request, repository_id)
     items = list(state.findings.values())
@@ -43,8 +53,8 @@ def list_findings(
         ]
     items.sort(key=lambda item: (SEVERITY_ORDER.get(item.severity, 9), item.check_id, item.id))
 
-    offset = _parse_cursor(cursor)
     total = len(items)
+    offset = cursor if cursor is not None else 0
     page = items[offset : offset + limit]
     next_cursor = str(offset + limit) if offset + limit < total else None
     return FindingPage(items=page, total=total, next_cursor=next_cursor)
@@ -65,12 +75,3 @@ def update_finding(
 ) -> Finding:
     state = repo_or_404(request, repository_id)
     return SERVICE.set_status(state, finding_id, payload.status)
-
-
-def _parse_cursor(cursor: str | None) -> int:
-    if not cursor:
-        return 0
-    try:
-        return max(0, int(cursor))
-    except ValueError:
-        return 0

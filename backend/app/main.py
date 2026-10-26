@@ -28,7 +28,7 @@ def create_app() -> FastAPI:
     settings = get_settings()
     app = FastAPI(
         title="RepoScribe API",
-        version="0.1.0",
+        version="0.2.0",
         docs_url="/api/docs",
         openapi_url="/api/openapi.json",
     )
@@ -51,6 +51,21 @@ def create_app() -> FastAPI:
         request.state.session_id = session
 
         if request.url.path.startswith("/api") and request.method != "OPTIONS":
+            # Liveness and provider-status poll at high frequency in production.
+            # They must not drain the per-session request budget.
+            if request.url.path in ("/api/v1/health", "/api/v1/provider"):
+                response = await call_next(request)
+                response.headers["X-Request-ID"] = request.state.request_id
+                if not existing:
+                    response.set_cookie(
+                        COOKIE_NAME,
+                        session,
+                        httponly=True,
+                        samesite="lax",
+                        secure=settings.app_env == "production",
+                        max_age=settings.workspace_ttl_minutes * 60,
+                    )
+                return response
             bucket = app.state.rate[session]
             now = time.monotonic()
             while bucket and now - bucket[0] > RATE_WINDOW_SECONDS:
