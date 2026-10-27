@@ -109,6 +109,7 @@ If any of these limits matter, deploy the Render service only and skip Vercel.
 | `AUDIT_TIMEOUT_SECONDS` | No | `60` |
 | `WORKSPACE_TTL_MINUTES` | No | `120` |
 | `MAX_UPLOAD_MB` | No | `20` |
+| `MAX_CONCURRENT_WORKSPACES` | No | `32` on the public demo (the code default is 8) |
 | `BACKEND_ORIGIN` | Vercel only | The Render service URL |
 
 Never put a secret in a `VITE_` variable: Vite inlines those into the browser bundle.

@@ -21,3 +21,6 @@ services:
         value: INFO
       - key: AUDIT_TIMEOUT_SECONDS
         value: "60"
+      # A public demo should not exhaust the default eight slots in one sitting.
+      - key: MAX_CONCURRENT_WORKSPACES
+        value: "32"

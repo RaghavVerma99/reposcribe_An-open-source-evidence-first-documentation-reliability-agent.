@@ -108,6 +108,22 @@ def test_single_service_spa_deep_links_and_api_404s(client) -> None:
     deep_link = client.get("/r/repo_unused/findings")
     assert deep_link.status_code == 200
     assert "text/html" in deep_link.headers["content-type"]
+    # The shell must revalidate after every deploy.
+    assert deep_link.headers["cache-control"] == "no-cache"
+
+    assets = sorted((dist / "assets").glob("*.js"))
+    if assets:
+        asset = client.get(f"/assets/{assets[0].name}")
+        assert asset.status_code == 200
+        assert asset.headers["cache-control"] == "public, max-age=31536000, immutable"
+        assert asset.headers["content-type"].startswith("text/javascript")
+
+    font = dist / "fonts" / "inter-latin.woff2"
+    if font.is_file():
+        served_font = client.get("/fonts/inter-latin.woff2")
+        assert served_font.status_code == 200
+        assert served_font.headers["content-type"] == "font/woff2"
+        assert "immutable" in served_font.headers["cache-control"]
 
     api_404 = client.get("/api/v1/not-a-real-endpoint")
     assert api_404.status_code == 404

@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import mimetypes
 import os
 import sys
 import time
@@ -25,6 +26,11 @@ from app.core.errors import AppError, app_error_handler, unhandled_error_handler
 from app.core.security import MB, read_session_cookie, set_session_secret, sign_session
 from app.core.settings import get_settings
 from app.services.store import Store, sweep_orphan_workspaces
+
+# Python's mimetypes table varies by image; register the font types explicitly
+# so preloaded woff2 files are not served as application/octet-stream.
+mimetypes.add_type("font/woff2", ".woff2")
+mimetypes.add_type("font/woff", ".woff")
 
 COOKIE_NAME = "reposcribe_session"
 API_PREFIX = "/api/v1"
@@ -109,13 +115,27 @@ class SPAStaticFiles(StaticFiles):
         except StarletteHTTPException as exc:
             if exc.status_code != 404 or not self._is_client_route(path):
                 raise
-            return await super().get_response("index.html", scope)
+            shell = await super().get_response("index.html", scope)
+            return self._with_cache(shell, "index.html")
         if response.status_code == 404:
             if path == "api" or path.startswith("api/"):
                 # Let the application's JSON error handler answer API typos.
                 raise StarletteHTTPException(status_code=404)
             if self._is_client_route(path):
-                return await super().get_response("index.html", scope)
+                shell = await super().get_response("index.html", scope)
+                return self._with_cache(shell, "index.html")
+        return self._with_cache(response, path)
+
+    @staticmethod
+    def _with_cache(response, path: str):
+        """Hashed assets are immutable; the shell must always revalidate."""
+        normalized = path.replace("\\", "/")
+        if normalized.endswith(".html"):
+            response.headers["Cache-Control"] = "no-cache"
+        elif normalized.startswith("assets/") or normalized.startswith("fonts/"):
+            response.headers["Cache-Control"] = "public, max-age=31536000, immutable"
+        else:
+            response.headers["Cache-Control"] = "public, max-age=3600"
         return response
 
     @staticmethod
