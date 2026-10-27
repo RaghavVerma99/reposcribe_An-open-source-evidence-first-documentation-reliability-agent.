@@ -9,11 +9,14 @@ import {
 import type { ApiError } from "../../lib/api";
 import type { FindingStatus, ProviderMode, Severity } from "../../lib/types";
 
-type Variant = "primary" | "secondary" | "ghost" | "danger";
+type Variant = "primary" | "paper" | "secondary" | "ghost" | "danger";
 
 const VARIANTS: Record<Variant, string> = {
   primary:
     "bg-accent text-[#03140a] shadow-[0_0_0_1px_rgba(34,197,94,0.28),0_10px_28px_-18px_rgba(34,197,94,0.8)] hover:bg-accent-hover hover:shadow-[0_0_0_1px_rgba(74,222,128,0.42),0_12px_32px_-18px_rgba(74,222,128,0.8)] disabled:bg-line disabled:text-ink-faint disabled:shadow-none",
+  // Editorial primary: paper on ink. Used where green would be too loud.
+  paper:
+    "bg-ink text-canvas shadow-[inset_0_1px_0_rgba(255,255,255,0.45)] hover:bg-white disabled:bg-line disabled:text-ink-faint disabled:shadow-none",
   secondary:
     "border border-line bg-surface text-ink hover:border-line-strong hover:bg-surface-elevated disabled:text-ink-faint",
   ghost: "text-ink-muted hover:bg-subtle hover:text-ink disabled:text-ink-faint",

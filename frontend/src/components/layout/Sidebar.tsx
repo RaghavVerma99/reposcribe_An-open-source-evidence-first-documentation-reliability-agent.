@@ -139,7 +139,7 @@ export default function Sidebar({
             RepoScribe
           </p>
           <p className="truncate font-mono text-2xs uppercase tracking-[0.1em] text-ink-faint">
-            Documentation reliability
+            Docs reliability
           </p>
         </div>
       </div>

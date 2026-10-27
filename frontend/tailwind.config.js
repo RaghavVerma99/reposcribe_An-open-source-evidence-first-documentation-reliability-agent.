@@ -4,27 +4,36 @@ export default {
   theme: {
     extend: {
       colors: {
-        // The reference is a true-black editorial surface: white type, a very
-        // small set of neutral cards, and one confident terminal green.
-        canvas: "#000000",
-        surface: "#111111",
-        "surface-elevated": "#181818",
-        subtle: "#1a1a1a",
-        "subtle-elevated": "#222222",
+        // A near-black editorial surface with warm paper type. Color is a
+        // signal, not decoration: the signal palette appears on rules, status,
+        // and one accent word per section.
+        canvas: "#060606",
+        paper: "#f4f4ef",
+        surface: "#0c0c0c",
+        "surface-elevated": "#141414",
+        subtle: "#171717",
+        "subtle-elevated": "#202020",
         ink: {
-          DEFAULT: "#f7f7f7",
-          muted: "#a3a3a3",
-          faint: "#808080",
+          DEFAULT: "#f4f4ef",
+          muted: "#a3a39c",
+          faint: "#767670",
         },
         line: {
-          DEFAULT: "#2b2b2b",
-          strong: "#474747",
+          DEFAULT: "#262624",
+          strong: "#3d3d39",
         },
         accent: {
           DEFAULT: "#22c55e",
           hover: "#4ade80",
           soft: "#071a0f",
           strong: "#6ee7a0",
+        },
+        signal: {
+          lime: "#d8ff3e",
+          coral: "#ff6a4d",
+          azure: "#6aa8ff",
+          amber: "#ffc24b",
+          lilac: "#b9a6ff",
         },
         ok: { DEFAULT: "#22c55e", soft: "#08210f" },
         warn: { DEFAULT: "#f59e0b", soft: "#261806" },

@@ -173,7 +173,7 @@ export default function AppShell() {
           <main id="workspace-main" className="relative flex-1">
             <div
               aria-hidden="true"
-              className="pointer-events-none absolute inset-x-0 top-0 h-64 bg-[radial-gradient(58%_100%_at_50%_0%,rgba(34,197,94,0.045),transparent_72%)]"
+              className="pointer-events-none absolute inset-x-0 top-0 h-64 bg-[radial-gradient(58%_100%_at_50%_0%,rgba(255,255,255,0.035),transparent_72%)]"
             />
             <div className="relative mx-auto w-full max-w-[1320px]">
               <Suspense

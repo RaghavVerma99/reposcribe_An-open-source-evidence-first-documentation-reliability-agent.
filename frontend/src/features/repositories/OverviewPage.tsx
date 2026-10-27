@@ -97,9 +97,11 @@ export default function OverviewPage() {
         }
         actions={
           <>
-            <Button variant="primary" onClick={runAudit} loading={auditing}>
-              Run audit
-            </Button>
+            {hasAudit ? (
+              <Button variant="primary" onClick={runAudit} loading={auditing}>
+                Run audit
+              </Button>
+            ) : null}
             <Link to={`/r/${repository.id}/ask`} className={secondaryLink}>
               Ask about codebase
             </Link>
@@ -219,7 +221,7 @@ export default function OverviewPage() {
                       </div>
                       <div className="mt-2 h-1 overflow-hidden rounded-full bg-subtle">
                         <div
-                          className="h-full rounded-full bg-accent/60"
+                          className="h-full rounded-full bg-gradient-to-r from-ink/70 to-ink/20"
                           style={{ width: `${Math.max(2, Math.round((count / maxLanguage) * 100))}%` }}
                         />
                       </div>

@@ -4,13 +4,18 @@
 
 /* Set before Tailwind loads so there is no white flash on first paint. */
 html {
-  background: #000000;
+  background: #060606;
 }
 
 :root {
   color-scheme: dark;
-  --canvas: #000000;
-  --hairline: rgba(255, 255, 255, 0.06);
+  --canvas: #060606;
+  --hairline: rgba(255, 255, 255, 0.08);
+  --signal-lime: #d8ff3e;
+  --signal-coral: #ff6a4d;
+  --signal-azure: #6aa8ff;
+  --signal-amber: #ffc24b;
+  --signal-lilac: #b9a6ff;
 }
 
 html,
@@ -117,6 +122,59 @@ summary:focus-visible,
 .scroll-region {
   overscroll-behavior: contain;
   -webkit-overflow-scrolling: touch;
+}
+
+/* A hairline that carries one signal color at its leading edge. */
+.signal-rule {
+  position: relative;
+}
+
+.signal-rule::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0;
+  height: 1px;
+  width: 44px;
+  background: var(--rule-color, var(--signal-lime));
+}
+
+/* A quiet duotone halo; the only large area of color on the page. */
+.duotone {
+  background:
+    radial-gradient(42% 52% at 18% 30%, rgba(216, 255, 62, 0.14), transparent 70%),
+    radial-gradient(38% 48% at 82% 22%, rgba(106, 168, 255, 0.12), transparent 72%),
+    radial-gradient(48% 42% at 60% 86%, rgba(255, 106, 77, 0.1), transparent 72%);
+}
+
+/* Underline that draws in on hover, used for editorial links. */
+.link-underline {
+  background-image: linear-gradient(currentColor, currentColor);
+  background-size: 0% 1px;
+  background-repeat: no-repeat;
+  background-position: 0 100%;
+  transition: background-size 260ms cubic-bezier(0.22, 0.7, 0.24, 1);
+}
+
+.link-underline:hover {
+  background-size: 100% 1px;
+}
+
+/* Fine grain for the dark canvas; generated, never fetched. */
+.grain::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.03;
+  background-image: radial-gradient(rgba(255, 255, 255, 0.9) 0.5px, transparent 0.5px);
+  background-size: 3px 3px;
+}
+
+/* Outlined display word, used once as a background gesture. */
+.text-outline {
+  color: transparent;
+  -webkit-text-stroke: 1px rgba(244, 244, 239, 0.16);
 }
 
 /* Landing narrative: a faint engineering grid that fades out before it ends. */
