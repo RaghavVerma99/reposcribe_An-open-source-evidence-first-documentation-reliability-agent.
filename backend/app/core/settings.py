@@ -36,8 +36,15 @@ class Settings:
     max_extracted_files: int = 5000
     max_file_mb: int = 2
     max_extracted_mb: int = 200
+    max_request_body_mb: int = 1
+    audit_timeout_seconds: int = 60
     workspace_root: Path = Path("./.reposcribe-workspaces")
     workspace_ttl_minutes: int = 120
+
+    # Signs the anonymous session cookie. When empty, a random secret is
+    # generated per process: safe for one worker, but every worker must share
+    # this value when more than one is running.
+    session_secret: str = ""
 
     alan_api_key: str = ""
     alan_workflow_id: str = ""
@@ -76,8 +83,11 @@ def get_settings() -> Settings:
         max_extracted_files=_int("MAX_EXTRACTED_FILES", 5000),
         max_file_mb=_int("MAX_FILE_MB", 2),
         max_extracted_mb=_int("MAX_EXTRACTED_MB", 200),
+        max_request_body_mb=_int("MAX_REQUEST_BODY_MB", 1),
+        audit_timeout_seconds=_int("AUDIT_TIMEOUT_SECONDS", 60),
         workspace_root=Path(_env("WORKSPACE_ROOT", "./.reposcribe-workspaces")),
         workspace_ttl_minutes=_int("WORKSPACE_TTL_MINUTES", 120),
+        session_secret=_env("SESSION_SECRET"),
         alan_api_key=_env("ALAN_API_KEY"),
         alan_workflow_id=_env("ALAN_WORKFLOW_ID"),
         alan_base_url=_env("ALAN_BASE_URL"),

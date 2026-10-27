@@ -15,7 +15,7 @@ from __future__ import annotations
 import re
 
 from app.analyzers.common import PATHLIKE_RE, RepoIndex, _resolve_relative
-from app.analyzers.factory import AnalyzerResult, doc_evidence, make_finding
+from app.analyzers.factory import AnalyzerResult, cap_findings, deadline_expired, doc_evidence, make_finding
 from app.core.security import is_within
 
 CHECK_ID = "docs.file_reference_exists"
@@ -55,9 +55,15 @@ class FileReferenceAnalyzer:
         "these describe files the reader will create, not files the doc is trying to document.",
     ]
 
-    def analyze(self, index: RepoIndex) -> AnalyzerResult:
+    def analyze(self, index: RepoIndex, *, deadline: float | None = None) -> AnalyzerResult:
         result = AnalyzerResult(check_id=self.check_id, limitations=list(self.limitations))
         for doc in index.docs.values():
+            if deadline_expired(deadline):
+                result.complete = False
+                result.limitations.append(
+                    "The audit time budget expired before this check finished; its findings may be incomplete."
+                )
+                return cap_findings(result)
             link_targets = {link.resolved_path for link in doc.links if link.resolved_path}
             seen: set[str] = set()
             for span in doc.code_spans:
@@ -97,4 +103,4 @@ class FileReferenceAnalyzer:
                         limitations=list(self.limitations),
                     )
                 )
-        return result
+        return cap_findings(result)

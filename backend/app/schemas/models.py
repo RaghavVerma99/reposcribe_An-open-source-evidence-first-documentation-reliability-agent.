@@ -35,6 +35,11 @@ class Finding(BaseModel):
     title: str
     summary: str
     status: FindingStatus
+    status_before_dismissal: FindingStatus | None = Field(
+        default=None,
+        description="Status the finding held before a reviewer dismissed it. "
+        "Reopening restores this value instead of guessing a new status.",
+    )
     severity: Severity
     confidence_note: str
     documentation_claim: str | None = None
@@ -89,6 +94,10 @@ class RepositoryOverview(BaseModel):
     last_audit_at: datetime | None = None
     indexed_at: datetime | None = None
     limitations: list[str] = Field(default_factory=list)
+    # True when at least one router prefix could not be resolved statically.
+    # The route list is then incomplete, and route findings are reported as
+    # `insufficient_evidence` rather than as missing routes.
+    routes_prefix_unresolved: bool = False
 
 
 class AuditSummary(BaseModel):
@@ -183,7 +192,9 @@ class HealthResponse(BaseModel):
 
 
 class AuditRequest(BaseModel):
-    check_ids: list[str] | None = None
+    # Capped so a single request cannot ask for an unbounded list; the whole
+    # registry only has six checks, so anything longer is wasted work.
+    check_ids: list[str] | None = Field(default=None, max_length=64)
 
 
 class QuestionRequest(BaseModel):

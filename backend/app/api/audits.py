@@ -4,24 +4,25 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Depends, Request
 
-from app.api.deps import repo_or_404
+from app.api.deps import get_app_settings, repo_or_404
 from app.core.errors import AppError
+from app.core.settings import Settings
 from app.schemas.models import AuditRequest, AuditRun
 from app.services.audit_service import AuditService
 
 router = APIRouter(prefix="/repositories/{repository_id}/audits", tags=["audits"])
-SERVICE = AuditService()
 
 
 @router.post("", response_model=AuditRun)
 def run_audit(
     request: Request,
     repository_id: str,
+    settings: Settings = Depends(get_app_settings),
     payload: AuditRequest | None = None,
 ) -> AuditRun:
     state = repo_or_404(request, repository_id)
     check_ids = payload.check_ids if payload else None
-    return SERVICE.run(state, check_ids)
+    return AuditService(settings).run(state, check_ids)
 
 
 @router.get("/{audit_id}", response_model=AuditRun)

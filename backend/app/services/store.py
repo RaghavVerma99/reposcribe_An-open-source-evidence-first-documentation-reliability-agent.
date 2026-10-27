@@ -67,8 +67,10 @@ class Store:
             self._repos[state.id] = state
 
     def get(self, repository_id: str, session_id: str | None = None) -> RepositoryState | None:
+        # The sweep takes its own short lock section, so a slow directory
+        # removal never blocks this lookup.
+        self.sweep_expired()
         with self._lock:
-            self._sweep_locked()
             state = self._repos.get(repository_id)
             if state is None:
                 return None
@@ -89,17 +91,44 @@ class Store:
         with self._lock:
             return len(self._repos)
 
-    def _sweep_locked(self) -> None:
+    def sweep_expired(self) -> int:
+        """Forget expired repositories and delete their workspaces.
+
+        The dict is updated under the lock (so an expired repository is never
+        handed out again), but the directory removal happens outside it: a
+        large tree must not stall every other request.
+        """
         ttl = timedelta(minutes=self._settings.workspace_ttl_minutes)
         cutoff = utcnow() - ttl
-        expired = [
-            key
-            for key, state in self._repos.items()
-            if state.last_accessed_at < cutoff
-        ]
-        for key in expired:
-            state = self._repos.pop(key)
-            shutil.rmtree(state.workspace, ignore_errors=True)
+        with self._lock:
+            expired_ids = [key for key, state in self._repos.items() if state.last_accessed_at < cutoff]
+            states = [self._repos.pop(key) for key in expired_ids]
+        removed = 0
+        for state in states:
+            if shutil.rmtree(state.workspace, ignore_errors=True) is None:
+                removed += 1
+        return removed
+
+
+def sweep_orphan_workspaces(settings) -> list[str]:
+    """Remove workspace directories that no registered repository owns.
+
+    Session state lives in memory, so after a crash or restart every directory
+    on disk belongs to nobody. Left alone they leak irrecoverably, because the
+    TTL sweep only knows about registered sessions. Multi-worker deployments
+    are not supported until state becomes external (Phase 5): one worker would
+    delete another's live workspaces here.
+    """
+    root = Path(settings.workspace_root)
+    if not root.is_dir():
+        return []
+    removed: list[str] = []
+    for entry in root.iterdir():
+        if not entry.is_dir():
+            continue
+        shutil.rmtree(entry, ignore_errors=True)
+        removed.append(entry.name)
+    return removed
 
 
 def new_workspace(settings: Settings, repository_id: str) -> tuple[Path, Path, Path]:

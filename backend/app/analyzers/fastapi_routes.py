@@ -5,7 +5,15 @@ from __future__ import annotations
 import difflib
 
 from app.analyzers.common import DocRoute, RepoIndex, Route, read_text
-from app.analyzers.factory import MAX_EXCERPT_CHARS, AnalyzerResult, doc_evidence, file_evidence, make_finding
+from app.analyzers.factory import (
+    MAX_EXCERPT_CHARS,
+    AnalyzerResult,
+    cap_findings,
+    deadline_expired,
+    doc_evidence,
+    file_evidence,
+    make_finding,
+)
 from app.schemas.models import EvidenceRef
 
 CHECK_ID = "fastapi.route_matches_docs"
@@ -21,7 +29,7 @@ class RouteAnalyzer:
     supported_patterns = ["@app.get", "@app.post", "@router.get", "@router.api_route"]
     limitations = LIMITATIONS
 
-    def analyze(self, index: RepoIndex) -> AnalyzerResult:
+    def analyze(self, index: RepoIndex, *, deadline: float | None = None) -> AnalyzerResult:
         result = AnalyzerResult(check_id=self.check_id, limitations=list(LIMITATIONS))
         documented = _dedupe(index.documented_routes)
         if not documented:
@@ -35,6 +43,12 @@ class RouteAnalyzer:
             by_path.setdefault(route.path, []).append(route)
 
         for doc_route in documented:
+            if deadline_expired(deadline):
+                result.complete = False
+                result.limitations.append(
+                    "The audit time budget expired before this check finished; its findings may be incomplete."
+                )
+                return cap_findings(result)
             if (doc_route.method, doc_route.path) in pairs:
                 continue
             doc = index.docs.get(doc_route.doc_path)
@@ -112,7 +126,7 @@ class RouteAnalyzer:
                     limitations=list(LIMITATIONS),
                 )
             )
-        return result
+        return cap_findings(result)
 
 
 def _openapi_route_excerpt(text: str, route_path: str, method: str) -> str:

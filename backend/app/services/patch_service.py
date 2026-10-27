@@ -14,7 +14,7 @@ from app.analyzers.common import (
     _resolve_relative,
     read_text,
 )
-from app.analyzers.registry import get_analyzer
+from app.analyzers.registry import ANALYZERS
 from app.core.errors import AppError
 from app.core.security import contains_secret
 from app.core.settings import Settings
@@ -123,69 +123,98 @@ class PatchService:
         )
 
         finding = state.findings.get(patch.finding_id)
-        analyzer = get_analyzer(finding.check_id) if finding else None
         overridden = (
             state.index.with_doc_override(patch.target_path, patch.proposed_content)
             if state.index is not None
             else None
         )
-        if analyzer is None or overridden is None:
+        if finding is None or overridden is None:
             steps.append(
                 ValidationStep(
                     id="V-3",
-                    label="The finding no longer reproduces",
+                    label="The finding is fixed and no new drift is introduced",
                     outcome="not_run",
-                    detail="No analyzer available for this finding.",
+                    detail="No indexed snapshot is available for re-analysis.",
                 )
             )
         else:
             try:
-                result = analyzer.analyze(overridden)
-                # The same defect can resurface with a different finding id if the
-                # patch changes the subject (e.g. a documented route path). Compare
-                # by subject_key to detect that the underlying drift is still present.
-                still_present = any(
-                    item.check_id == finding.check_id
-                    and item.subject_key == finding.subject_key
-                    for item in result.findings
-                )
+                # Compare the whole finding set before and after the patch, not just
+                # the originating finding. A patch that fixes its own claim while
+                # rewriting another documented route to something the code does not
+                # define must not be reported as passing.
+                baseline = _finding_keys(state.index)
+                proposed = _finding_keys(overridden)
+                still_present = finding.subject_key in proposed.get(finding.check_id, set())
+                introduced = _introduced_keys(baseline, proposed)
+                if still_present:
+                    outcome = "failed"
+                    detail = "The same finding is still detected in the proposed document."
+                elif introduced:
+                    outcome = "failed"
+                    shown = ", ".join(introduced[:3])
+                    more = f" (+{len(introduced) - 3} more)" if len(introduced) > 3 else ""
+                    detail = f"The patch introduces {len(introduced)} new finding(s): {shown}{more}."
+                else:
+                    outcome = "passed"
+                    detail = "The check that produced the finding no longer reports it, and no new finding was introduced."
                 steps.append(
                     ValidationStep(
                         id="V-3",
-                        label="The finding no longer reproduces",
-                        outcome="failed" if still_present else "passed",
-                        detail=(
-                            "The same finding is still detected in the proposed document."
-                            if still_present
-                            else "The check that produced the finding no longer reports it."
-                        ),
+                        label="The finding is fixed and no new drift is introduced",
+                        outcome=outcome,
+                        detail=detail,
                     )
                 )
             except Exception:
                 steps.append(
                     ValidationStep(
                         id="V-3",
-                        label="The finding no longer reproduces",
+                        label="The finding is fixed and no new drift is introduced",
                         outcome="inconclusive",
-                        detail="The analyzer could not be re-run on the proposed document.",
+                        detail="The analyzers could not be re-run on the proposed document.",
                     )
                 )
 
-        links = overridden.docs[patch.target_path].links if overridden else []
-        broken = [link for link in links if not link.exists or link.missing_anchor]
-        steps.append(
-            ValidationStep(
-                id="V-4",
-                label="Internal links and anchors in the proposed document",
-                outcome="failed" if broken else "passed",
-                detail=(
-                    f"{len(broken)} link(s) do not resolve: "
-                    + ", ".join(sorted({link.target for link in broken})[:5])
-                    if broken
-                    else "All internal links resolve within the snapshot."
-                ),
+        if overridden is None:
+            steps.append(
+                ValidationStep(
+                    id="V-4",
+                    label="Internal links and anchors in the proposed document",
+                    outcome="not_run",
+                    detail="No indexed snapshot is available to resolve links.",
+                )
             )
-        )
+        else:
+            original_doc = state.index.docs.get(patch.target_path) if state.index else None
+            proposed_doc = overridden.docs.get(patch.target_path)
+            if proposed_doc is None:
+                steps.append(
+                    ValidationStep(
+                        id="V-4",
+                        label="Internal links and anchors in the proposed document",
+                        outcome="not_run",
+                        detail="The proposed document is not part of the indexed snapshot.",
+                    )
+                )
+            else:
+                # Only links this patch breaks count. A pre-existing broken link that
+                # the patch leaves untouched must not block an otherwise sound repair.
+                pre_existing = _broken_link_keys(original_doc.links) if original_doc else set()
+                introduced_links = sorted(_broken_link_keys(proposed_doc.links) - pre_existing)
+                steps.append(
+                    ValidationStep(
+                        id="V-4",
+                        label="Internal links and anchors in the proposed document",
+                        outcome="failed" if introduced_links else "passed",
+                        detail=(
+                            f"{len(introduced_links)} link(s) introduced by this patch do not resolve: "
+                            + ", ".join(sorted({target for target, _ in introduced_links})[:5])
+                            if introduced_links
+                            else _links_ok_detail(pre_existing)
+                        ),
+                    )
+                )
 
         introduced = _introduced_issues(state, patch)
         steps.append(
@@ -243,6 +272,54 @@ class PatchService:
         return text
 
 
+def _finding_keys(index) -> dict[str, set[str]]:
+    """Map check_id -> subject_key set for one snapshot of the index.
+
+    ``subject_key`` is stable across line moves, so the same defect maps to the
+    same key before and after a patch. An analyzer that fails is left out of the
+    comparison instead of failing the whole validation step.
+    """
+    keys: dict[str, set[str]] = {}
+    for analyzer in ANALYZERS:
+        try:
+            result = analyzer.analyze(index)
+        except Exception:
+            continue
+        keys[analyzer.check_id] = {finding.subject_key for finding in result.findings}
+    return keys
+
+
+def _introduced_keys(
+    baseline: dict[str, set[str]], proposed: dict[str, set[str]]
+) -> list[str]:
+    introduced: list[str] = []
+    for check_id, subjects in sorted(proposed.items()):
+        for subject in sorted(subjects - baseline.get(check_id, set())):
+            introduced.append(f"{check_id}: {subject}")
+    return introduced
+
+
+def _broken_link_keys(links) -> set[tuple[str, str]]:
+    keys: set[tuple[str, str]] = set()
+    for link in links:
+        if link.external or not link.checkable:
+            continue
+        if not link.exists:
+            keys.add((link.target, "missing file"))
+        elif link.missing_anchor:
+            keys.add((link.target, "missing anchor"))
+    return keys
+
+
+def _links_ok_detail(pre_existing: set[tuple[str, str]]) -> str:
+    if not pre_existing:
+        return "All internal links resolve within the snapshot."
+    return (
+        f"No link is broken by this patch. {len(pre_existing)} pre-existing broken "
+        "link(s) are unchanged and were not counted."
+    )
+
+
 def _draft(**kwargs):
     from app.schemas.models import PatchDraft
 
@@ -276,7 +353,9 @@ def _introduced_issues(state: RepositoryState, patch) -> list[str]:
     original_doc = state.index.docs.get(patch.target_path)
     original_spans = {span.text for span in original_doc.code_spans} if original_doc else set()
     overridden = state.index.with_doc_override(patch.target_path, patch.proposed_content)
-    doc = overridden.docs[patch.target_path]
+    doc = overridden.docs.get(patch.target_path)
+    if doc is None:
+        return []
     symbols = {symbol.name for symbol in state.index.symbols}
     modules = {symbol.module for symbol in state.index.symbols}
     issues: list[str] = []

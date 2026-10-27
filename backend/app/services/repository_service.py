@@ -194,6 +194,7 @@ class RepositoryService:
             last_audit_at=_last_audit(state),
             indexed_at=state.indexed_at,
             limitations=combined_limitations,
+            routes_prefix_unresolved=index.route_prefix_unresolved,
         )
 
 

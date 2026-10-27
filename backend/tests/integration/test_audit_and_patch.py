@@ -94,6 +94,102 @@ def test_validation_detects_a_patch_that_does_not_fix(sample_state) -> None:
     assert steps["V-3"].outcome == "failed"
 
 
+def _route_finding_in(state, doc_path: str):
+    return next(
+        finding
+        for finding in AuditService().run(state).findings
+        if finding.check_id == "fastapi.route_matches_docs"
+        and finding.documentation_claim == "`GET /api/users`"
+        and finding.evidence[0].path == doc_path
+    )
+
+
+def test_route_patch_only_rewrites_the_finding_it_fixes(sample_state) -> None:
+    """A patch for `GET /api/users` must not rewrite the `DELETE` row beside it.
+
+    Rewriting every line that contains the old path turned
+    `DELETE /api/users/{user_id}` into `DELETE /api/v2/users/{user_id}`, a route
+    the source never defines.
+    """
+    service, state = sample_state
+    finding = _route_finding_in(state, "docs/api.md")
+    patch = PatchService(service.settings).create(state, finding.id)
+
+    assert "| `GET` | `/api/v2/users` |" in patch.proposed_content
+    assert "| `DELETE` | `/api/users/{user_id}` |" in patch.proposed_content
+    assert "/api/v2/users/{user_id}" not in patch.proposed_content
+
+
+def test_validation_ignores_pre_existing_broken_links(sample_state) -> None:
+    """A sound patch must not fail because the document already had a bad link."""
+    service, state = sample_state
+    finding = _route_finding_in(state, "README.md")
+    patches = PatchService(service.settings)
+    patch = patches.create(state, finding.id)
+
+    result = patches.validate(state, patch.id)
+    steps = {step.id: step for step in result.steps}
+    assert steps["V-4"].outcome == "passed", steps["V-4"].detail
+    assert "pre-existing" in steps["V-4"].detail
+    assert result.outcome == "passed"
+
+
+def test_validation_rejects_a_patch_that_introduces_new_drift(sample_state) -> None:
+    """Fixing one claim while inventing another must fail V-3.
+
+    Before this check, validation compared only the originating finding, so a
+    draft that repaired `GET /api/users` and rewrote the `DELETE` row to
+    `DELETE /api/v2/users/{user_id}` (no such route) passed all six steps.
+    """
+    service, state = sample_state
+    finding = _route_finding_in(state, "docs/api.md")
+    patches = PatchService(service.settings)
+    patch = patches.create(state, finding.id)
+
+    regressed = patch.model_copy(
+        update={
+            "id": "pat_introduces_drift",
+            "proposed_content": patch.proposed_content.replace(
+                "/api/users/{user_id}", "/api/v2/users/{user_id}"
+            ),
+        }
+    )
+    assert regressed.proposed_content != patch.proposed_content
+    state.patches[regressed.id] = regressed
+
+    result = patches.validate(state, regressed.id)
+    steps = {step.id: step for step in result.steps}
+    assert steps["V-3"].outcome == "failed", steps["V-3"].detail
+    assert "introduces" in steps["V-3"].detail
+    assert "DELETE /api/v2/users/{user_id}" in steps["V-3"].detail
+    assert result.outcome == "failed"
+
+
+def test_validation_rejects_a_patch_that_adds_a_broken_link(sample_state) -> None:
+    """V-4 fails on links the patch breaks, even when others were already broken."""
+    service, state = sample_state
+    finding = _route_finding_in(state, "README.md")
+    patches = PatchService(service.settings)
+    patch = patches.create(state, finding.id)
+
+    regressed = patch.model_copy(
+        update={
+            "id": "pat_breaks_link",
+            "proposed_content": patch.proposed_content.replace(
+                "(docs/api.md)", "(docs/renamed-api.md)"
+            ),
+        }
+    )
+    assert regressed.proposed_content != patch.proposed_content
+    state.patches[regressed.id] = regressed
+
+    result = patches.validate(state, regressed.id)
+    steps = {step.id: step for step in result.steps}
+    assert steps["V-4"].outcome == "failed", steps["V-4"].detail
+    assert "docs/renamed-api.md" in steps["V-4"].detail
+    assert result.outcome == "failed"
+
+
 def test_patch_target_must_be_documentation(sample_state) -> None:
     service, state = sample_state
     source_finding = Finding(

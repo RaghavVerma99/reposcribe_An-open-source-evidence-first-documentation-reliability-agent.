@@ -269,7 +269,12 @@ def test_cannot_patch_resolved_finding(client) -> None:
         if f["check_id"] == "docs.readme_checklist" and f["status"] == "needs_review"
     )
     store = client.app.state.store
-    state = store.get(repo["id"], client.cookies.get("reposcribe_session", "sess"))
+    cookie = client.cookies.get("reposcribe_session", "sess")
+    # The cookie carries a signature; the store is keyed by the bare session id.
+    from app.core.security import read_session_cookie
+
+    session = read_session_cookie(cookie) or "sess"
+    state = store.get(repo["id"], session)
     # Simulate AuditService.run marking the finding resolved.
     state.findings[finding["id"]] = state.findings[finding["id"]].model_copy(
         update={"status": "resolved"}

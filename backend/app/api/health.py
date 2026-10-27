@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import time
 
 from fastapi import APIRouter, Depends
 
@@ -14,14 +15,25 @@ from app.schemas.models import HealthResponse, ProviderStatus
 router = APIRouter(tags=["health"])
 VERSION = "0.3.0"
 
-# Background-up probe: the workspace may not be writable, but that does not
-# change between requests within a single process lifetime. Cache once.
+# The workspace may not be writable, but that does not change between requests.
+# The probe is cached for a short window instead of forever, so a workspace that
+# becomes unwritable (a full disk, a revoked mount) is noticed within the TTL.
+PROBE_TTL_SECONDS = 10.0
+
 _probe_result: bool | None = None
+_probe_checked_at: float = 0.0
+_probe_root: str = ""
 
 
 def _check_workspace_writable(settings: Settings) -> bool:
-    global _probe_result
-    if _probe_result is not None:
+    global _probe_result, _probe_checked_at, _probe_root
+    root = os.path.abspath(str(settings.workspace_root))
+    now = time.monotonic()
+    if (
+        _probe_result is not None
+        and _probe_root == root
+        and (now - _probe_checked_at) < PROBE_TTL_SECONDS
+    ):
         return _probe_result
     try:
         workspace = settings.ensure_workspace_root()
@@ -32,10 +44,13 @@ def _check_workspace_writable(settings: Settings) -> bool:
         finally:
             os.close(fd)
         probe.unlink(missing_ok=True)
-        _probe_result = True
+        writable = True
     except OSError:
-        _probe_result = False
-    return _probe_result
+        writable = False
+    _probe_result = writable
+    _probe_checked_at = now
+    _probe_root = root
+    return writable
 
 
 @router.get("/health", response_model=HealthResponse)

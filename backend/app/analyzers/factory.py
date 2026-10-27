@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import time
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -11,6 +12,9 @@ from app.core.security import redact
 from app.schemas.models import EvidenceRef, Finding, FindingStatus, Severity
 
 MAX_EXCERPT_CHARS = 4000
+# Upper bound per check. Without it a repository with thousands of broken links
+# produces an audit response large enough to exhaust memory on both sides.
+MAX_FINDINGS_PER_CHECK = 100
 
 
 @dataclass
@@ -19,6 +23,25 @@ class AnalyzerResult:
     findings: list[Finding] = field(default_factory=list)
     skipped: list[tuple[str, str]] = field(default_factory=list)
     limitations: list[str] = field(default_factory=list)
+    # False when the analyzer stopped early (the audit time budget expired), so
+    # the audit must not treat missing findings as resolved defects.
+    complete: bool = True
+
+
+def deadline_expired(deadline: float | None) -> bool:
+    return deadline is not None and time.monotonic() >= deadline
+
+
+def cap_findings(result: AnalyzerResult, limit: int = MAX_FINDINGS_PER_CHECK) -> AnalyzerResult:
+    """Keep the response bounded and say so, instead of silently truncating."""
+    total = len(result.findings)
+    if total > limit:
+        result.findings = result.findings[:limit]
+        result.limitations.append(
+            f"Only the first {limit} of {total} findings are shown for this check; "
+            "fix those and run the audit again to see the rest."
+        )
+    return result
 
 
 def finding_id(check_id: str, primary_path: str, subject_key: str) -> str:

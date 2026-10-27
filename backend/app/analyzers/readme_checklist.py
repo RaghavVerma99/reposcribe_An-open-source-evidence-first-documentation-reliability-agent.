@@ -9,7 +9,7 @@ import re
 from pathlib import Path
 
 from app.analyzers.common import RepoIndex
-from app.analyzers.factory import AnalyzerResult, doc_evidence, make_finding
+from app.analyzers.factory import AnalyzerResult, cap_findings, deadline_expired, doc_evidence, make_finding
 
 CHECK_ID = "docs.readme_checklist"
 
@@ -26,8 +26,14 @@ class ReadmeChecklistAnalyzer:
         "Presence checks do not evaluate whether the content itself is accurate.",
     ]
 
-    def analyze(self, index: RepoIndex) -> AnalyzerResult:
+    def analyze(self, index: RepoIndex, *, deadline: float | None = None) -> AnalyzerResult:
         result = AnalyzerResult(check_id=self.check_id, limitations=list(self.limitations))
+        if deadline_expired(deadline):
+            result.complete = False
+            result.limitations.append(
+                "The audit time budget expired before this check finished; its findings may be incomplete."
+            )
+            return result
         readme = _readme(index)
         if readme is None:
             result.findings.append(
@@ -104,7 +110,7 @@ class ReadmeChecklistAnalyzer:
                     evidence,
                 )
             )
-        return result
+        return cap_findings(result)
 
 
 def _finding(subject: str, title: str, summary: str, status: str, severity: str, evidence):

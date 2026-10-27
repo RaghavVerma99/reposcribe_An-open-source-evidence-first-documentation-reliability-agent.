@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from app.analyzers.common import RepoIndex
-from app.analyzers.factory import AnalyzerResult, doc_evidence, make_finding
+from app.analyzers.factory import AnalyzerResult, cap_findings, deadline_expired, doc_evidence, make_finding
 
 CHECK_ID = "markdown.internal_link_exists"
 
@@ -19,9 +19,15 @@ class MarkdownLinkAnalyzer:
     supported_patterns = ["inline links", "reference-style headings", "relative paths"]
     limitations = LIMITATIONS
 
-    def analyze(self, index: RepoIndex) -> AnalyzerResult:
+    def analyze(self, index: RepoIndex, *, deadline: float | None = None) -> AnalyzerResult:
         result = AnalyzerResult(check_id=self.check_id, limitations=list(LIMITATIONS))
         for doc in index.docs.values():
+            if deadline_expired(deadline):
+                result.complete = False
+                result.limitations.append(
+                    "The audit time budget expired before this check finished; its findings may be incomplete."
+                )
+                return cap_findings(result)
             for link in doc.links:
                 if link.external or not link.checkable:
                     continue
@@ -67,4 +73,4 @@ class MarkdownLinkAnalyzer:
                             ],
                         )
                     )
-        return result
+        return cap_findings(result)

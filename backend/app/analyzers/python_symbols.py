@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from app.analyzers.common import DOTTED_RE, PATHLIKE_RE, RepoIndex, STDLIB_ROOTS
-from app.analyzers.factory import AnalyzerResult, doc_evidence, make_finding
+from app.analyzers.factory import AnalyzerResult, cap_findings, deadline_expired, doc_evidence, make_finding
 
 CHECK_ID = "python.public_symbol_referenced"
 
@@ -17,7 +17,7 @@ class SymbolReferenceAnalyzer:
         "Standard-library and third-party dotted references are skipped.",
     ]
 
-    def analyze(self, index: RepoIndex) -> AnalyzerResult:
+    def analyze(self, index: RepoIndex, *, deadline: float | None = None) -> AnalyzerResult:
         result = AnalyzerResult(check_id=self.check_id, limitations=list(self.limitations))
         names = {symbol.name for symbol in index.symbols}
         modules = {symbol.module for symbol in index.symbols}
@@ -27,6 +27,12 @@ class SymbolReferenceAnalyzer:
 
         seen: set[str] = set()
         for doc in index.docs.values():
+            if deadline_expired(deadline):
+                result.complete = False
+                result.limitations.append(
+                    "The audit time budget expired before this check finished; its findings may be incomplete."
+                )
+                return cap_findings(result)
             for span in doc.code_spans:
                 token = span.text.strip()
                 if not DOTTED_RE.match(token) or PATHLIKE_RE.match(token):
@@ -61,4 +67,4 @@ class SymbolReferenceAnalyzer:
                         limitations=list(self.limitations),
                     )
                 )
-        return result
+        return cap_findings(result)

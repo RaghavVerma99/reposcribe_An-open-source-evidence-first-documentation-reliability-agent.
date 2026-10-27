@@ -126,6 +126,21 @@ class Route:
     end_line: int
     prefix_resolved: bool = True
     prefix_line: int | None = None
+    # The router variable the decorator was attached to and the path exactly as
+    # written in the decorator. Both are kept so a prefix applied by another
+    # module can be recomputed without stacking prefixes on top of each other.
+    router: str = ""
+    declared_path: str = ""
+
+
+@dataclass(frozen=True)
+class RouterInclude:
+    """A router mounted from another module: ``app.include_router(router, prefix=...)``."""
+
+    module: str
+    attr: str
+    prefix: str | None
+    line: int
 
 
 @dataclass
@@ -137,6 +152,12 @@ class PyFile:
     env_refs: list[tuple[str, int]] = field(default_factory=list)
     route_prefix_unresolved: bool = False
     parse_error: str | None = None
+    # Local name -> (dotted module, imported attribute or None for a module).
+    imports: dict[str, tuple[str, str | None]] = field(default_factory=dict)
+    # Routers from other modules mounted in this file.
+    includes: list[RouterInclude] = field(default_factory=list)
+    # Locally declared routers with their fully resolved prefix (None = unknown).
+    router_prefixes: dict[str, str | None] = field(default_factory=dict)
 
 
 def _is_inside_fence(flags: list[bool], index: int) -> bool:
@@ -401,14 +422,82 @@ def _decorator_route(node: ast.AST) -> tuple[str, str, str] | None:
     return None
 
 
-def _router_prefixes(tree: ast.AST) -> dict[str, tuple[str | None, int]]:
-    """Map router variable -> (prefix or None when unresolvable, declaration line).
+def _collect_imports(tree: ast.AST, path: str) -> dict[str, tuple[str, str | None]]:
+    """Map a local name to (dotted module, imported attribute or None).
 
-    A prefix is only resolvable when it is a string literal. A variable,
-    f-string, or function call is recorded as ``None`` so every route below it
-    is reported as unresolved instead of being compared as if it were bare.
+    ``import app.routes as routes``        -> {"routes": ("app.routes", None)}
+    ``from app.routes import router``      -> {"router": ("app.routes", "router")}
+    ``from . import users`` (in app/main)  -> {"users": ("app.users", "users")}
     """
-    prefixes: dict[str, tuple[str | None, int]] = {}
+    imports: dict[str, tuple[str, str | None]] = {}
+    package = path.split("/")[:-1]
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            for alias in node.names:
+                if alias.asname:
+                    imports[alias.asname] = (alias.name, None)
+                else:
+                    root = alias.name.split(".")[0]
+                    imports[root] = (root, None)
+        elif isinstance(node, ast.ImportFrom):
+            if node.level:
+                drop = node.level - 1
+                base_parts = package[: len(package) - drop] if drop else package
+                parts = base_parts + ([node.module] if node.module else [])
+                module = ".".join(parts)
+            else:
+                module = node.module or ""
+            for alias in node.names:
+                if alias.name == "*":
+                    continue
+                imports[alias.asname or alias.name] = (module, alias.name)
+    return imports
+
+
+def _router_ref(
+    node: ast.AST, imports: dict[str, tuple[str, str | None]]
+) -> tuple[str, str] | None:
+    """Resolve a router reference to (dotted module, router attribute)."""
+    if isinstance(node, ast.Name):
+        entry = imports.get(node.id)
+        if entry is None:
+            return None
+        module, attribute = entry
+        if attribute is None:
+            return None  # a module, not a router object
+        return module, attribute
+    if isinstance(node, ast.Attribute) and isinstance(node.value, ast.Name):
+        entry = imports.get(node.value.id)
+        if entry is None:
+            return None
+        module, attribute = entry
+        target_module = module if attribute is None else f"{module}.{attribute}"
+        return target_module, node.attr
+    return None
+
+
+def _concat_prefixes(*parts: str | None) -> str | None:
+    combined = ""
+    for part in parts:
+        if part is None:
+            return None
+        combined = _join_path(combined, part) if (combined or part) else combined
+    return combined
+
+
+def _router_plan(
+    tree: ast.AST, imports: dict[str, tuple[str, str | None]]
+) -> tuple[dict[str, str | None], dict[str, int], list[RouterInclude]]:
+    """Resolve router prefixes declared in this module.
+
+    Returns the effective prefix per local router, the declaration line per
+    router, and the routers mounted from other modules. A prefix is only
+    resolvable when every component is a string literal; anything else is
+    recorded as ``None`` so routes below it are reported as unresolved rather
+    than compared as if they were bare.
+    """
+    own: dict[str, str | None] = {}
+    lines: dict[str, int] = {}
     for node in ast.walk(tree):
         if not isinstance(node, ast.Assign) or len(node.targets) != 1:
             continue
@@ -424,24 +513,51 @@ def _router_prefixes(tree: ast.AST) -> dict[str, tuple[str | None, int]]:
                         prefix = keyword.value.value
                     else:
                         prefix = None
-            prefixes[target.id] = (prefix, node.lineno)
+            own[target.id] = prefix
+            lines[target.id] = node.lineno
+
+    local_includes: list[tuple[str | None, str, str | None]] = []
+    external: list[RouterInclude] = []
     for node in ast.walk(tree):
-        if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute) and node.func.attr == "include_router":
-            if node.args and isinstance(node.args[0], ast.Name):
-                name = node.args[0].id
-                extra = ""
-                for keyword in node.keywords:
-                    if keyword.arg == "prefix":
-                        if isinstance(keyword.value, ast.Constant) and isinstance(keyword.value.value, str):
-                            extra = keyword.value.value
-                        else:
-                            prefixes[name] = (None, node.lineno)
-                            break
-                if name in prefixes and prefixes[name][0] is not None:
-                    prefixes[name] = ((prefixes[name][0] or "") + extra, prefixes[name][1])
-                elif name not in prefixes:
-                    prefixes[name] = (None, node.lineno)
-    return prefixes
+        if not isinstance(node, ast.Call) or not isinstance(node.func, ast.Attribute):
+            continue
+        if node.func.attr != "include_router" or not node.args:
+            continue
+        parent = node.func.value.id if isinstance(node.func.value, ast.Name) else None
+        extra: str | None = ""
+        for keyword in node.keywords:
+            if keyword.arg == "prefix":
+                value = keyword.value
+                extra = (
+                    value.value
+                    if isinstance(value, ast.Constant) and isinstance(value.value, str)
+                    else None
+                )
+        child = node.args[0]
+        if isinstance(child, ast.Name) and child.id in own:
+            local_includes.append((parent, child.id, extra))
+            continue
+        ref = _router_ref(child, imports)
+        if ref is not None:
+            external.append(RouterInclude(ref[0], ref[1], extra, node.lineno))
+
+    effective = dict(own)
+    # Includes can chain (router_a includes router_b, app includes router_a), so
+    # iterate until the prefixes stop changing.
+    for _ in range(len(local_includes) + 1):
+        changed = False
+        for parent, child, extra in local_includes:
+            if parent is None or (parent not in own and parent not in imports):
+                parent_prefix: str | None = ""
+            else:
+                parent_prefix = effective.get(parent)
+            combined = _concat_prefixes(parent_prefix, extra, own.get(child, ""))
+            if combined != effective.get(child):
+                effective[child] = combined
+                changed = True
+        if not changed:
+            break
+    return effective, lines, external
 
 
 def parse_python(path: str, text: str) -> PyFile:
@@ -453,8 +569,11 @@ def parse_python(path: str, text: str) -> PyFile:
         return result
 
     module = _module_name(path)
-    prefixes = _router_prefixes(tree)
-    module_unresolved = any(value is None for value, _ in prefixes.values())
+    imports = _collect_imports(tree, path)
+    prefixes, prefix_lines, external_includes = _router_plan(tree, imports)
+    result.imports = imports
+    result.includes = external_includes
+    result.router_prefixes = prefixes
 
     for node in tree.body:
         if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
@@ -477,12 +596,12 @@ def parse_python(path: str, text: str) -> PyFile:
                 prefix = ""
                 prefix_line: int | None = None
                 if base in prefixes:
-                    value, declaration_line = prefixes[base]
+                    value = prefixes[base]
                     if value is None:
                         resolved = False
                     else:
                         prefix = value
-                        prefix_line = declaration_line if value else None
+                        prefix_line = prefix_lines.get(base) if value else None
                 elif base not in ("app", "application"):
                     resolved = False
                 if not resolved:
@@ -502,6 +621,8 @@ def parse_python(path: str, text: str) -> PyFile:
                             end_line=getattr(node, "end_lineno", node.lineno) or node.lineno,
                             prefix_resolved=True,
                             prefix_line=prefix_line,
+                            router=base,
+                            declared_path=route_path,
                         )
                     )
         if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute):
@@ -516,8 +637,6 @@ def parse_python(path: str, text: str) -> PyFile:
             if isinstance(slice_node, ast.Constant) and isinstance(slice_node.value, str):
                 result.env_refs.append((slice_node.value, node.lineno))
 
-    if module_unresolved:
-        result.route_prefix_unresolved = True
     return result
 
 
@@ -571,6 +690,49 @@ class RepoIndex:
         return replace(self, docs=docs, doc_routes=doc_routes)
 
 
+def _apply_router_includes(py_files: dict[str, PyFile]) -> None:
+    """Apply prefixes from routers mounted in another module.
+
+    ``app/main.py`` doing ``app.include_router(router, prefix="/api")`` where
+    ``router`` comes from ``app/routes/users.py`` means the routes in that file
+    are served under ``/api`` plus their own prefix. Without this pass the tool
+    compared the documented path against the un-prefixed path and reported a
+    correct route as missing.
+    """
+    module_map: dict[str, str] = {}
+    for rel in py_files:
+        module_map.setdefault(_module_name(rel), rel)
+
+    for rel, py_file in py_files.items():
+        for include in py_file.includes:
+            target_rel = module_map.get(include.module)
+            if target_rel is None or target_rel == rel:
+                # The mounted router cannot be located in this repository. The
+                # effective prefix is unknown, so the honest state is
+                # "unresolved" rather than a bare path that may be wrong.
+                py_file.route_prefix_unresolved = True
+                continue
+            target = py_files[target_rel]
+            own_prefix = target.router_prefixes.get(include.attr)
+            mounted = [route for route in target.routes if route.router == include.attr]
+            if not mounted:
+                continue
+            if include.prefix is None or own_prefix is None:
+                # A dynamic mount prefix means the real path is unknown. Drop
+                # these routes instead of comparing against a wrong path.
+                target.routes = [route for route in target.routes if route.router != include.attr]
+                target.route_prefix_unresolved = True
+                continue
+            full_prefix = _join_path(include.prefix, own_prefix)
+            target.routes = [
+                replace(
+                    route,
+                    path=_join_path(full_prefix, route.declared_path or route.path),
+                )
+                for route in target.routes
+            ]
+
+
 def build_index(root: Path, doc_overrides: dict[str, str] | None = None) -> RepoIndex:
     """Parse the repository into an index without executing any of it."""
     overrides = doc_overrides or {}
@@ -615,25 +777,15 @@ def build_index(root: Path, doc_overrides: dict[str, str] | None = None) -> Repo
     doc_routes: list[DocRoute] = []
     for doc in docs.values():
         doc_routes.extend(extract_doc_routes(doc))
+    _apply_router_includes(py_files)
     openapi_routes: list[DocRoute] = []
-    openapi_files: list[str] = []
+    # Only files that can actually be an OpenAPI document are read. Walking and
+    # decoding every JSON and YAML file in the repository was pure overhead.
     for rel, _absolute, _size in iter_files(root):
-        lowered = rel.lower()
-        if lowered.endswith(("openapi.json", "openapi.yaml", "openapi.yml")):
-            openapi_files.append(rel)
-    # The list above is sorted via iter_files; iterate in that order for determinism.
-    seen_openapi_files: set[str] = set()
-    for rel in list(docs) + openapi_files + [p for p in _all_files(root) if p.lower().endswith((".json", ".yaml", ".yml"))]:
-        lowered = rel.lower()
-        is_openapi = lowered.endswith(("openapi.json", "openapi.yaml", "openapi.yml"))
-        if is_openapi and rel in seen_openapi_files:
+        if not rel.lower().endswith(("openapi.json", "openapi.yaml", "openapi.yml")):
             continue
-        if is_openapi:
-            seen_openapi_files.add(rel)
         text = overrides.get(rel) or read_text(root / rel)
-        if not text:
-            continue
-        if is_openapi:
+        if text:
             openapi_routes.extend(parse_openapi(rel, text))
 
     return RepoIndex(
@@ -646,10 +798,6 @@ def build_index(root: Path, doc_overrides: dict[str, str] | None = None) -> Repo
         skipped=skipped,
         scanned_files=scanned,
     )
-
-
-def _all_files(root: Path) -> list[str]:
-    return [rel for rel, _, _ in iter_files(root)]
 
 
 def excerpt(lines: list[str], start: int, end: int | None = None, limit: int = 40) -> str:

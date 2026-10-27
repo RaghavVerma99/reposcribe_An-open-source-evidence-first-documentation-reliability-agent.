@@ -86,32 +86,51 @@ def _verify_citations(answer: GroundedAnswer, chunks: list[Chunk]) -> GroundedAn
     valid = []
     rejected = 0
     for citation in answer.citations:
-        matches = [
-            chunk
-            for chunk in chunks
-            if chunk.path == citation.path
-            and _ranges_overlap(
-                chunk.start_line, chunk.end_line, citation.start_line or 0, citation.end_line or 0
-            )
-        ]
-        if matches:
-            chunk = matches[0]
-            valid.append(
-                citation.model_copy(
-                    update={
-                        "start_line": max(citation.start_line or chunk.start_line, chunk.start_line),
-                        "end_line": min(citation.end_line or chunk.end_line, chunk.end_line),
-                        "excerpt": chunk.text,
-                    }
-                )
-            )
-        else:
+        chunk = _match_chunk(citation, chunks)
+        if chunk is None:
             rejected += 1
+            continue
+        start = citation.start_line if citation.start_line is not None else chunk.start_line
+        end = citation.end_line if citation.end_line is not None else chunk.end_line
+        # Clamp to the retrieved excerpt so a citation can never claim lines
+        # that were not actually retrieved.
+        start = max(start, chunk.start_line)
+        end = min(end, chunk.end_line)
+        if end < start:
+            start, end = chunk.start_line, chunk.end_line
+        valid.append(
+            citation.model_copy(
+                update={
+                    "start_line": start,
+                    "end_line": end,
+                    "excerpt": chunk.text,
+                }
+            )
+        )
 
     limitations = list(answer.limitations)
     if rejected:
         limitations.append(f"{rejected} citation(s) were removed because they did not match retrieved evidence.")
     return answer.model_copy(update={"citations": valid, "limitations": limitations})
+
+
+def _match_chunk(citation, chunks: list[Chunk]) -> Chunk | None:
+    """Find the retrieved chunk a citation refers to, if any.
+
+    A citation without line numbers is accepted only when the path matches a
+    retrieved chunk, because the excerpt shown to the reader is always the
+    chunk that was actually retrieved.
+    """
+    for chunk in chunks:
+        if chunk.path != citation.path:
+            continue
+        if citation.start_line is None and citation.end_line is None:
+            return chunk
+        start = citation.start_line if citation.start_line is not None else chunk.start_line
+        end = citation.end_line if citation.end_line is not None else chunk.end_line
+        if _ranges_overlap(chunk.start_line, chunk.end_line, start, end):
+            return chunk
+    return None
 
 
 def _ranges_overlap(a_start: int, a_end: int, b_start: int, b_end: int) -> bool:

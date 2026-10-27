@@ -1,11 +1,16 @@
-"""Untrusted-input handling: ZIP extraction, path safety, secret redaction.
+"""Untrusted-input handling: ZIP extraction, path safety, secret redaction,
+and session-cookie signing.
 
 Every guard in SPEC 18 lives here so it can be unit tested independently.
 """
 
 from __future__ import annotations
 
+import hashlib
+import hmac
+import os
 import re
+import secrets
 import zipfile
 from io import BytesIO
 from pathlib import Path, PurePosixPath
@@ -205,3 +210,54 @@ def iter_files(root: Path):
         if is_excluded(rel) or is_secret_path(rel):
             continue
         yield rel, path, path.stat().st_size
+
+
+# ---------------------------------------------------------------------------
+# Session-cookie signing
+#
+# The session id is the only authorization this application has: a repository
+# is visible only to the session that created it. An unsigned cookie lets a
+# client pick any id it likes (session fixation), so the value is signed with
+# an HMAC over the random id. The secret comes from SESSION_SECRET, or is
+# generated per process when it is unset — safe for a single worker.
+# ---------------------------------------------------------------------------
+
+
+_SESSION_SECRET = ""
+# Generated once per process when SESSION_SECRET is unset, so a cookie signed in
+# one request still verifies in the next.
+_GENERATED_SECRET: str | None = None
+
+
+def set_session_secret(secret: str) -> None:
+    """Set the process-wide signing secret (called once at startup)."""
+    global _SESSION_SECRET
+    _SESSION_SECRET = secret
+
+
+def _signing_secret() -> str:
+    if _SESSION_SECRET:
+        return f"{_SESSION_SECRET}|{os.getpid()}"
+    global _GENERATED_SECRET
+    if _GENERATED_SECRET is None:
+        _GENERATED_SECRET = secrets.token_hex(32)
+    return f"{_GENERATED_SECRET}|{os.getpid()}"
+
+
+def sign_session(session_id: str) -> str:
+    """Return the cookie value for a session id: ``<id>.<hmac>``."""
+    key = _signing_secret().encode()
+    digest = hmac.new(key, session_id.encode(), hashlib.sha256).hexdigest()[:32]
+    return f"{session_id}.{digest}"
+
+
+def read_session_cookie(value: str) -> str | None:
+    """Return the session id when the cookie value carries a valid signature."""
+    parts = value.rsplit(".", 1)
+    if len(parts) != 2 or not parts[0] or not parts[1]:
+        return None
+    session_id, digest = parts
+    expected = hmac.new(_signing_secret().encode(), session_id.encode(), hashlib.sha256).hexdigest()[:32]
+    if not hmac.compare_digest(digest, expected):
+        return None
+    return session_id

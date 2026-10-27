@@ -133,6 +133,26 @@ def test_finding_can_be_dismissed(client) -> None:
     assert unknown.status_code == 404
 
 
+def test_reopen_restores_the_status_held_before_dismissal(client) -> None:
+    repository_id = _create_sample(client)
+    audit = client.post(f"/api/v1/repositories/{repository_id}/audits").json()
+    finding = next(item for item in audit["findings"] if item["status"] == "verified")
+
+    dismissed = client.patch(
+        f"/api/v1/repositories/{repository_id}/findings/{finding['id']}",
+        json={"status": "dismissed"},
+    ).json()
+    assert dismissed["status"] == "dismissed"
+    assert dismissed["status_before_dismissal"] == "verified"
+
+    reopened = client.patch(
+        f"/api/v1/repositories/{repository_id}/findings/{finding['id']}",
+        json={"status": dismissed["status_before_dismissal"]},
+    ).json()
+    assert reopened["status"] == "verified"
+    assert reopened["status_before_dismissal"] is None
+
+
 def test_finding_status_payload_is_validated(client) -> None:
     repository_id = _create_sample(client)
     audit = client.post(f"/api/v1/repositories/{repository_id}/audits").json()

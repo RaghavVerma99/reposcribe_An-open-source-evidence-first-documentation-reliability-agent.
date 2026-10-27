@@ -117,6 +117,10 @@ def _patch_route(finding: Finding, document: str) -> PatchProposal:
     """Repair a documented route against the closest discoverable route.
 
     Rules:
+    - Only lines that mention both the documented method and the documented
+      path are rewritten. A bare path substring match would also rewrite a
+      different row (for example ``DELETE /api/users/{user_id}`` while fixing
+      ``GET /api/users``), inventing a route the code does not define.
     - Method and path are only rewritten when the change is unambiguous.
     - A combined method-and-path change is rejected: it implies two
       independent claims drifted, and an automated fix would require a
@@ -161,31 +165,31 @@ def _patch_route(finding: Finding, document: str) -> PatchProposal:
 
     lines = document.splitlines(keepends=True)
     changed = 0
-    replacements: list[str] = []
     for index, line in enumerate(lines):
-        if path_changed and old_path not in line:
-            continue
-        if method_changed and old_method not in line:
+        # Both parts of the claim must appear on the same line. That keeps the
+        # edit on the documented route that produced this finding and leaves
+        # neighbouring rows for their own findings.
+        if old_path not in line or not _mentions_method(line, old_method):
             continue
         updated = line
         if path_changed:
             updated = updated.replace(old_path, new_path)
         if method_changed:
-            updated = re.sub(rf"\b{old_method}\b", new_method, updated, count=1)
+            updated = re.sub(rf"\b{re.escape(old_method)}\b", new_method, updated, count=1)
         if updated != line:
             lines[index] = updated
             changed += 1
     if not changed:
-        raise AppError("patch_not_available", "The documented route text was not found in the target document.", 422)
+        raise AppError(
+            "patch_not_available",
+            "The documented method and path were not found together on one line of the target document.",
+            422,
+        )
 
-    if path_changed and method_changed:
-        # Unreachable given the guard above, kept for explicit reasoning.
-        replacements.append("Both the documented path and method were updated to match source.")
-    elif path_changed:
-        replacements.append(f"Updated the documented path from {old_path} to {new_path}.")
-    elif method_changed:
-        replacements.append(f"Updated the documented method from {old_method} to {new_method}.")
-    rationale = " ".join(replacements) or "Updated the documented route to match source."
+    if path_changed:
+        rationale = f"Updated the documented path from {old_path} to {new_path}."
+    else:
+        rationale = f"Updated the documented method from {old_method} to {new_method}."
     limitations: list[str] = []
     if "Closest discovered route" in (finding.observed_fact or ""):
         limitations.append(
@@ -227,7 +231,7 @@ def _patch_symbol(finding: Finding, document: str, index: RepoIndex) -> PatchPro
     ratio = difflib.SequenceMatcher(None, token.split(".")[-1], closest).ratio()
     if ratio < 0.75:
         raise AppError("patch_not_available", "No indexed symbol is close enough to propose a safe replacement.", 422)
-    new_token = token.replace(token.split(".")[-1], closest)
+    new_token = token.rsplit(".", 1)[0] + "." + closest if "." in token else closest
     new_document = document.replace(f"`{token}`", f"`{new_token}`")
     if new_document == document:
         raise AppError("patch_not_available", "The symbol reference was not found in the target document.", 422)
@@ -236,6 +240,10 @@ def _patch_symbol(finding: Finding, document: str, index: RepoIndex) -> PatchPro
         rationale=f"Updated `{token}` to the indexed symbol `{new_token}`.",
         limitations=["Replacement is based on name similarity within the static index."],
     )
+
+
+def _mentions_method(line: str, method: str) -> bool:
+    return re.search(rf"\b{re.escape(method)}\b", line) is not None
 
 
 def _first_backtick(text: str) -> str | None:

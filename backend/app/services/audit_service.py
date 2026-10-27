@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+import time
 import uuid
 
-from app.analyzers.factory import AnalyzerResult, make_finding
+from app.analyzers.factory import AnalyzerResult, deadline_expired, make_finding
 from app.analyzers.registry import CHECKS_SUPPORTED, get_analyzer
 from app.core.errors import AppError
+from app.core.settings import Settings, get_settings
 from app.schemas.models import AuditRun, AuditSummary, Finding
 from app.services.store import RepositoryState, utcnow
 
@@ -21,6 +23,9 @@ CHECK_LABELS = {
 
 
 class AuditService:
+    def __init__(self, settings: Settings | None = None) -> None:
+        self.settings = settings or get_settings()
+
     def run(self, state: RepositoryState, check_ids: list[str] | None = None) -> AuditRun:
         if not state.audit_lock.acquire(blocking=False):
             raise AppError(
@@ -47,19 +52,37 @@ class AuditService:
         checks_run: list[str] = []
         checks_skipped: list[str] = []
         limitations: list[str] = []
+        deadline = time.monotonic() + self.settings.audit_timeout_seconds
 
         for check_id in selected:
             analyzer = get_analyzer(check_id)
             if analyzer is None:
                 checks_skipped.append(check_id)
                 continue
+            if deadline_expired(deadline):
+                checks_skipped.append(check_id)
+                limitations.append(
+                    f"{check_id} was skipped because the audit time budget of "
+                    f"{self.settings.audit_timeout_seconds} seconds expired."
+                )
+                continue
             try:
-                result: AnalyzerResult = analyzer.analyze(state.index)
+                result: AnalyzerResult = analyzer.analyze(state.index, deadline=deadline)
             except Exception as exc:  # a broken analyzer must not sink the audit
                 checks_skipped.append(check_id)
                 limitations.append(f"{check_id} could not run: {type(exc).__name__}.")
                 continue
-            checks_run.append(check_id)
+            if not result.complete:
+                # The check stopped at the time budget. Counting it as "run"
+                # would let the resolution logic below dismiss findings the
+                # check never reached, so it is recorded as skipped.
+                checks_skipped.append(check_id)
+                limitations.append(
+                    f"{check_id} stopped at the audit time budget; its findings are incomplete."
+                )
+            else:
+                checks_run.append(check_id)
+            limitations.extend(result.limitations)
             limitations.extend(result.limitations)
             for path, reason in result.skipped:
                 limitations.append(f"{path} skipped: {reason}")
@@ -68,9 +91,10 @@ class AuditService:
                     finding = finding.model_copy(update={"status": "dismissed"})
                 findings[finding.id] = finding
 
-        # A finding can only be marked resolved by a check that actually ran.
-        # During a partial audit (or when an analyzer fails), findings from
-        # checks outside that scope keep their previous status.
+        # A finding can only be marked resolved by a check that actually ran to
+        # completion. During a partial audit (an analyzer failed or stopped at
+        # the time budget), findings from checks outside that scope keep their
+        # previous status instead of being reported as fixed.
         rerun_checks = set(checks_run)
         for finding_id, previous_finding in previous.items():
             if finding_id in findings:
@@ -120,9 +144,18 @@ class AuditService:
             raise AppError("invalid_request", "Unsupported status transition.")
         if status == "dismissed":
             state.dismissed.add(finding_id)
+            # Remember what the reviewer dismissed. Reopening restores this
+            # instead of downgrading a verified defect to needs_review.
+            previous = (
+                finding.status
+                if finding.status != "dismissed"
+                else finding.status_before_dismissal
+            )
+            update = {"status": "dismissed", "status_before_dismissal": previous}
         else:
             state.dismissed.discard(finding_id)
-        updated = finding.model_copy(update={"status": status})
+            update = {"status": status, "status_before_dismissal": None}
+        updated = finding.model_copy(update=update)
         state.findings[finding_id] = updated
         for audit in state.audits.values():
             audit.findings = [updated if item.id == finding_id else item for item in audit.findings]
