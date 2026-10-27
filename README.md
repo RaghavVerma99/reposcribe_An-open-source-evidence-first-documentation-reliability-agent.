@@ -47,7 +47,8 @@ contradictions in the documentation you already have.
 - Minimal Markdown patch generation, unified diff, six-step validation, and safe export.
 - Finding lifecycle: verified, needs review, insufficient evidence, resolved after a rescan, dismissed.
 - Provider interface with an honest local demo provider, plus an Alan adapter that refuses to pretend.
-- 94 backend tests across unit, integration, and security suites.
+- 133 backend tests across unit, integration, and security suites (one built-SPA check skips until
+  `frontend/dist` exists).
 
 **Planned**
 
@@ -99,7 +100,7 @@ section and in `.env.example`. Do not substitute a proprietary model silently.
 | Frontend | React 18, TypeScript, Vite, Tailwind CSS, React Router |
 | Backend | Python 3.11+, FastAPI, Pydantic v2, Uvicorn |
 | Parsing | `ast` for Python, purpose-built Markdown and route extractors |
-| Tests | Pytest with `httpx`/Starlette `TestClient` |
+| Tests | Pytest with `httpx`/Starlette `TestClient`; Playwright for the browser workflow |
 | Storage | In-memory session state plus a disposable on-disk workspace |
 
 ## Local setup
@@ -150,26 +151,54 @@ npm run typecheck
 npm run build
 ```
 
-Last observed run in this build: `94 passed` (backend), `tsc --noEmit` and `vite build` clean (frontend), and
-39/39 checks passing in a headless Chromium pass covering route titles, fonts, overflow, keyboard focus, the
-finding lifecycle, URL filter state, and network isolation.
+End-to-end (builds the frontend, starts its own backend, and seeds the sample repository through the API; stop any
+other process on `127.0.0.1:8000` first):
+
+```powershell
+cd frontend
+npm run test:e2e
+```
+
+The Playwright suite runs 10 tests covering 39 checks: route titles and headings, self-hosted fonts, no horizontal
+overflow at 1440 px and 360 px, URL filter state, grounded Ask answers, the finding dismiss/reopen lifecycle, the
+mobile drawer focus trap, no external requests, and a clean console. It uses installed Google Chrome by default. To
+use Playwright's Chromium instead, run `npm run test:e2e:install` once and then set `PLAYWRIGHT_CHANNEL=chromium`.
+
+Last observed run in this build: `133 passed` (backend; one built-SPA check skips when `frontend/dist` has not
+been built), `tsc --noEmit` and `vite build` clean (frontend), and `10 passed` (Playwright, 39 checks). The CI
+workflow is configured to run the backend, frontend, and end-to-end jobs on every push and pull request to
+`main`.
 
 ## Sample repository walkthrough
 
-The bundled sample lives in `backend/app/data/sample_repo` and intentionally contains drift:
+The bundled sample lives in `backend/app/data/sample_repo`. It is deliberately small and contains real
+documentation drift, so the first run produces a useful result.
 
-1. Open the app and choose **Try sample repository**.
-2. Run the audit. Expect 10 findings: six verified route/file defects and four `needs_review` suggestions.
-   The verified set is four route mismatches (README and `docs/api.md` document `GET/POST /api/users` and
-   `DELETE /api/users/{user_id}` while the source defines `/api/v2/users`), one broken internal link
-   (`docs/setup.md`), and one missing file reference (`scripts/seed.py`). The `needs_review` set is two mentions of
-   an undocumented environment variable (`REDIS_URL`), one undocumented symbol
-   (`app.settings.load_settings_legacy`), and one README checklist finding (`LICENSE` is missing from the sample).
-3. Open a route finding. The inspector shows the README table row, the `APIRouter(prefix="/api/v2")` line, and
-   the decorator, all with line numbers.
-4. Choose **Generate fix**, then **Validate patch**. Validation reruns the check that produced the finding,
-   re-resolves every internal link, and confirms referenced files still exist.
-5. Download the patch or the updated Markdown.
+1. Start the backend and frontend as described above.
+2. Open the app and choose **Try sample repository**. The overview shows 8 files, 2 documentation files, and
+   2 discovered routes.
+3. Choose **Run audit**. Expect 10 findings: 6 `verified` and 4 `needs_review`.
+4. Open the first high, `verified` route finding (its documentation file is `docs/api.md` and its claim is
+   `GET /api/users`). The inspector shows the table row, the `APIRouter(prefix="/api/v2")` line, and the route
+   decorator, each with a file and line number.
+5. Choose **Generate fix**, then **Validate patch**. The patch changes the one row that produced the finding.
+   Validation compares every check before and after the patch: it fails if the finding still reproduces or if
+   the patch introduces a new finding, and it counts only links the patch itself breaks. Passing means this
+   finding is fixed and nothing new was introduced, not that every sentence in the document is correct.
+6. Download the patch or the updated Markdown.
+
+What the sample contains:
+
+| Status | Count | Defect |
+|---|---|---|
+| `verified` | 4 | README and `docs/api.md` document `/api/users`, but the source defines `/api/v2/users` |
+| `verified` | 1 | README references `scripts/seed.py`, which does not exist |
+| `verified` | 1 | README links to `docs/setup.md`, which does not exist |
+| `needs_review` | 2 | `REDIS_URL` is documented but not defined in `.env.example` or the source |
+| `needs_review` | 1 | `app.settings.load_settings_legacy` is documented but not indexed |
+| `needs_review` | 1 | The sample has no `LICENSE` file |
+
+For a click-by-click presenter script, see [`docs/demo-script.md`](docs/demo-script.md).
 
 ## Benchmark methodology and results
 
@@ -186,6 +215,11 @@ timing figures are published here.** Product claims must not precede measured nu
 - Workspaces are isolated per repository, path-checked on every read, and deleted on request or after the TTL.
 - Repository text is treated as untrusted input: prompt-injection content cannot change what the backend allows.
 - Errors return a request ID with no stack traces or secrets.
+- The session cookie is signed, so a client cannot pick a session id it likes; a forged value falls back to a
+  fresh session that sees nothing.
+- Requests are capped per client address (not by the session cookie, which a client can mint at will), JSON
+  bodies are capped at 1 MB, every audit runs inside a time budget, and each check reports at most 100
+  findings and says so when it caps.
 
 ## Known limitations
 
@@ -194,6 +228,8 @@ A categorized list of open audit findings, with severities and where to fix them
 
 - Python and FastAPI only, and only statically resolvable decorator routes. Dynamic registration is reported as
   inconclusive rather than absent, never as missing.
+- Route prefixes are resolved across modules: a router declared in one file and mounted in another is compared at
+  its real path. A mount that cannot be located, or a prefix that is not a literal, is reported as unresolved.
 - Route findings are `verified` when the router prefix resolves statically; a prefix that cannot be resolved makes
   them `insufficient_evidence` with a limitation. Symbol and configuration findings default to `needs_review`.
 - Automatic patch generation is implemented for route, internal-link, and symbol findings. Other findings need a
@@ -207,7 +243,8 @@ See `SPEC.md` §35. Next: GitHub import, OpenAPI comparison, and the benchmark h
 
 ## Contributing
 
-See `CONTRIBUTING.md`. Run the backend and frontend test commands above before opening a pull request.
+See `CONTRIBUTING.md`. Run the backend, frontend, and end-to-end test commands above before opening a pull
+request.
 
 ## License
 

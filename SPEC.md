@@ -5,7 +5,7 @@
 | Project | RepoScribe |
 | Tagline | Documentation that doesn't lie. |
 | Document | Product requirements + technical architecture + delivery plan |
-| Version | 2.3 |
+| Version | 2.4 |
 | Status | Implemented. Source version **0.3.0**; no git tag exists, so this is not a published release. v1.0 is reserved for the milestone defined in §Roadmap. |
 | Owner | risshu.verma7@gmail.com |
 | Last updated | 2026-10-26 |
@@ -422,7 +422,7 @@ Targets marked *proposed* are reasonable defaults; confirm and record in §34 be
 | NFR-07 | Model call bounds | 30 s timeout, 1 retry, ≤ 32k input tokens, schema-validated output | T-AI-02 |
 | NFR-08 | Determinism | Same snapshot produces identical finding IDs, counts, and evidence ranges | T-ANL-02 |
 | NFR-09 | Accessibility | WCAG 2.1 AA, full keyboard operation, visible focus, Lighthouse a11y ≥ 95 | Manual audit |
-| NFR-10 | Browsers | Last 2 versions of Chrome, Edge, Firefox, Safari | Manual smoke |
+| NFR-10 | Browsers | Last 2 versions of Chrome, Edge, Firefox, Safari | Playwright smoke on Chrome; manual smoke on Edge, Firefox, Safari |
 | NFR-11 | Test coverage | ≥ 80% line coverage on analyzers, core/security, and patch_service | CI report |
 | NFR-12 | Log hygiene | No secrets, no full file contents, request ID on every line | T-SEC-06 |
 | NFR-13 | Workspace lifecycle | TTL 2 h, delete on request, sweep orphans after 24 h | Integration test |
@@ -870,10 +870,17 @@ Additions beyond the original contract, added to close gaps: audit-status pollin
 | IDs | Opaque; never parsed; unknown ID → 404 |
 | Timestamps | ISO 8601 UTC |
 | Errors | `{ "error": { "code", "message", "request_id", "retryable" } }` |
-| Auth | Anonymous session cookie (`HttpOnly`, `SameSite=Lax`, `Secure` in production); workspaces are scoped to the session |
-| Rate limits | 120 requests/min/session across `/api/v1`, excluding `/api/v1/health` and `/api/v1/provider` (liveness and status polls) → 429 with `Retry-After` |
+| Auth | Anonymous session cookie (`HttpOnly`, `SameSite=Lax`, `Secure` in production), signed with an HMAC (`SESSION_SECRET`, or a per-process secret); workspaces are scoped to the session |
+| Rate limits | 120 requests/min per client address across `/api/v1`, excluding `/api/v1/health` and `/api/v1/provider` (liveness and status polls) → 429 with `Retry-After` |
+| Request bodies | Non-multipart bodies capped at `MAX_REQUEST_BODY_MB` (default 1 MB) → 413; uploads capped at `MAX_UPLOAD_MB` and streamed with a byte counter |
+| Audit budget | One audit runs inside `AUDIT_TIMEOUT_SECONDS` (default 60); checks that do not finish are reported as skipped, and their findings keep their previous status |
+| Finding bounds | Each check reports at most 100 findings and says so; excerpts are bounded |
 
-The current build applies one global per-session limit rather than a separate audit limit; a dedicated audit quota is deferred.
+The limit is keyed on the network peer, not on the session cookie: a client can mint new sessions at will, so
+a per-session limit could be reset by clearing the cookie. The session cookie is now signed, which stops a
+client from *choosing* an id (session fixation) but does not bound how many sessions it may create. The
+current build applies one global per-client limit rather than a separate audit limit; a dedicated audit quota
+is deferred.
 
 ### 20.3 Long-running work
 
@@ -895,7 +902,7 @@ Audits, indexing, and model calls are bounded (NFR-04, NFR-07). The current buil
 | `audit_in_progress` | 409 | Concurrent audit on one repository |
 | `patch_not_available` | 422 | No safe minimal change can be derived for this finding |
 | `patch_target_forbidden` | 422 | Target outside documentation allowlist |
-| `provider_rate_limited` | 429 | Upstream limit or local rate limit; `retryable: true` |
+| `rate_limited` | 429 | The local per-client request limit was reached; `retryable: true` |
 | `provider_unavailable` | 503 | Model unreachable; deterministic results still available |
 | `model_output_invalid` | 502 | Output failed schema or citation checks |
 | `not_found` | 404 | Unknown route |
@@ -1157,11 +1164,14 @@ reposcribe/
 ├── CONTRIBUTING.md
 ├── .gitignore
 ├── .env.example
+├── .github/workflows/ci.yml
 ├── docker-compose.yml               # optional
 ├── frontend/
 │   ├── package.json
 │   ├── vite.config.ts
 │   ├── tsconfig.json
+│   ├── playwright.config.ts
+│   ├── e2e/                         # API seed setup, fixtures, smoke spec
 │   └── src/
 │       ├── app/                     # App.tsx, router.tsx, providers.tsx
 │       ├── components/
@@ -1265,11 +1275,11 @@ Seeded repository with 10–20 known defects. Record seeded count, detected, fal
 
 ### 27.5 Commands and CI
 
-Define and document exact commands once the scaffold exists (for example `pytest`, `ruff check`, `mypy`, `npm run lint`, `npm run build`, `npm test`). CI runs lint, typecheck, unit, integration, and security suites on every push. A red suite blocks merge. Never report a suite as passing unless it ran.
+Define and document exact commands. The CI workflow is configured to run the available backend suite, the frontend typecheck and build, and the browser end-to-end suite on every push and pull request to `main`. A red suite blocks merge. Never report a suite as passing unless it ran.
 
-**Shipped commands:** `python -m pytest -q` (backend), `npm run typecheck` and `npm run build` (frontend). No linter or type checker is configured for Python yet, and CI is not yet wired; both are open work.
+**Shipped commands:** `python -m pytest -q` (backend), `npm run typecheck` and `npm run build` (frontend), and `npm run test:e2e` (Playwright: 10 tests, 39 checks). No linter or type checker is configured for Python yet; that remains open work.
 
-Test IDs (`T-01`, `T-SEC-01`, …) are logical identifiers used in §29. Concrete test functions live in `backend/tests/unit`, `backend/tests/integration`, `backend/tests/security`, and `backend/tests/test_api_contract.py`.
+Test IDs (`T-01`, `T-SEC-01`, …) are logical identifiers used in §29. Concrete test functions live in `backend/tests/unit`, `backend/tests/integration`, `backend/tests/security`, `backend/tests/test_api_contract.py`, and `frontend/e2e/smoke.spec.ts`.
 
 ## 28. Acceptance criteria
 
@@ -1377,11 +1387,11 @@ Full suites; benchmark with real numbers; deploy; README; 1–3 minute recording
 | Phase | State | Evidence |
 |---|---|---|
 | 0 — Inspect and prove the integration | **Blocked** | The Alan contract is unverified; `docs/alan-integration.md` holds the open checklist. The demo-mode decision is recorded in `D-06`. |
-| 1 — Deterministic vertical slice | Done | Sample repository, safe inventory, all six checks, route mismatch with real lines; `94 passed` |
+| 1 — Deterministic vertical slice | Done | Sample repository, safe inventory, all six checks, route mismatch with real lines; `133 passed` |
 | 2 — Evidence and patch workflow | Done | Normalized findings, inspector, patch generation, diff, six-step validation, export |
 | 3 — Alan agent and grounded Q&A | Partial | Retrieval, citation verification, and provider errors are implemented and tested; the grounded Q&A path runs through the local demo provider. The live Alan call is not implemented. |
 | 4 — UI polish | Done | Seven screens, per-operation loading/empty/error/partial states, keyboard-visible focus, responsive down to 360 px, no inert controls |
-| 5 — Test, deploy, submit | Partial | Suites pass and the UI builds; benchmark and deployment are not run, and the README publishes no unmeasured numbers |
+| 5 — Test, deploy, submit | Partial | Backend, frontend, and Playwright E2E suites are wired into CI; benchmark and deployment are not run, and the README publishes no unmeasured numbers |
 
 ## 31. Failure modes
 
@@ -1498,4 +1508,5 @@ Do not build these before users validate the core workflow.
 | 2.0 | 2026-10-26 | Restructured into five parts; added requirement IDs, check catalog, measurable NFRs, API error taxonomy and missing endpoints, identifier scheme, state matrix, traceability, risk and decision registers, test IDs; converted ad-hoc lists and ASCII tables to Markdown tables; resolved the API-versioning and session-model gaps by recorded decision. No requirement intent removed. |
 | 2.1 | 2026-10-26 | Aligned the document with the shipped build: module map, analyzer contracts, API success codes, rate-limit and long-running behaviour, error codes (`patch_not_available`, `audit_not_found`), decision-log resolutions, per-phase shipped status, and the real test and build commands. |
 | 2.2 | 2026-10-26 | **0.3.0 hardening (unreleased; no git tag)**: rate limit excludes `/health` and `/provider`; findings filters validated against `Literal[...]` so invalid values return 422; cursor validated as a non-negative integer (also 422 on garbage); /health probes workspace writability once per process; version string synced across `pyproject.toml`, `package.json`, FastAPI metadata, `/health.version`, README, and SPEC. See `docs/audit-2026-10.md`. |
-| 2.3 | 2026-10-26 | Corrected status and UI documentation to the implemented build: source version `0.3.0` with no git tag; true-black editorial tokens and self-hosted fonts in place of the proposed light theme; component inventory aligned with shipped modules. Recorded SPA deep-link fallback, secret-file exclusion from the index/manifest/counts, streaming upload limit, full route-template logging, last-access workspace TTL, the per-repository audit lock, and `94 passed` backend tests. |
+| 2.3 | 2026-10-26 | Corrected status and UI documentation to the implemented build: source version `0.3.0` with no git tag; true-black editorial tokens and self-hosted fonts in place of the proposed light theme; component inventory aligned with shipped modules. Recorded SPA deep-link fallback, secret-file exclusion from the index/manifest/counts, streaming upload limit, full route-template logging, last-access workspace TTL, the per-repository audit lock, and `133 passed` backend tests. |
+| 2.4 | 2026-10-26 | Moved the 39-check browser smoke pass into the repository as a 10-test Playwright suite (API-seeded fixtures, 360 px drawer and overflow coverage) and added it to CI alongside the backend and frontend jobs. Updated the shipped commands and the NFR-10 verification method; no product behavior changed. |

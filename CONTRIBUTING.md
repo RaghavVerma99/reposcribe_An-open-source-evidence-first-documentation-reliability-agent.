@@ -32,7 +32,12 @@ cd backend
 cd frontend
 npm run typecheck
 npm run build
+npm run test:e2e
 ```
+
+The end-to-end command builds the UI, starts its own backend on `127.0.0.1:8000`, and runs the Playwright smoke
+suite. Stop any other process on that port first. It uses installed Google Chrome by default; set
+`PLAYWRIGHT_CHANNEL=chromium` after `npm run test:e2e:install` to use Playwright's Chromium.
 
 A red suite blocks merge. Do not report a suite as passing unless you ran it and saw the result.
 

@@ -22,7 +22,7 @@ sequenceDiagram
     Model-->>API: proposed content + rationale
     API->>API: build diff, enforce target and size limits
     UI->>API: POST /patches/{id}/validate
-    API->>Engine: rerun the originating check on the proposed document
+    API->>Engine: rerun every check on the original and proposed documents
     Engine-->>API: six validation step outcomes
     API-->>UI: validation result (passed / failed / inconclusive)
 ```
@@ -61,15 +61,42 @@ sequenceDiagram
 
 Nothing executes repository code. A file that fails to parse becomes a skip with a reason, never a failed audit.
 
+## Route prefix resolution
+
+A route's real path is the router prefix plus the path in the decorator, and the prefix can live in a
+different file than the decorator:
+
+```text
+app/main.py     app.include_router(router, prefix="/api")   <- mount prefix
+app/routes.py   router = APIRouter(prefix="/v1")             <- declaration prefix
+                @router.get("/users")                        <- declared path
+```
+
+The index is built in two steps. `parse_python` resolves the prefixes it can see in one module: literal
+`APIRouter(prefix=...)` declarations, literal `include_router(prefix=...)` mounts, and nested routers. It
+records the routers that are mounted from another module as `RouterInclude` entries together with the
+imports that identify them. `build_index` then applies those mount prefixes to the routes of the target
+module, so the route above is compared as `/api/v1/users`.
+
+If a mounted router cannot be located in the repository, or its mount prefix is not a literal, the effective
+prefix is unknown. Those routes are dropped and the repository is marked as having an unresolved prefix, so
+route findings become `insufficient_evidence` instead of a false "missing route".
+
 Validation reuses the same machinery with a document override: `RepoIndex.with_doc_override(path, text)` returns
-a new index whose doc-derived structures are rebuilt from the proposed content, so step V-3 can ask the
-originating analyzer whether the finding still reproduces.
+a new index whose doc-derived structures are rebuilt from the proposed content. Step V-3 runs every analyzer on
+both the original and the proposed index and compares findings by `subject_key`, so it fails when the originating
+finding still reproduces **and** when the patch introduces a finding elsewhere. Step V-4 fails only on broken
+links that the patch itself adds or changes; links that were already broken are reported but not counted.
 
 ## State and lifecycle
 
 | Concern | Implementation |
 |---|---|
-| Session | Anonymous `HttpOnly` cookie minted on first response; workspaces are scoped to it |
+| Session | Anonymous `HttpOnly` cookie minted on first response; the value is `<id>.<hmac>` signed with `SESSION_SECRET` (or a per-process secret) so a client cannot choose an id; workspaces are scoped to it |
+| Rate limit | Keyed on the client address, not the cookie: a client can mint sessions at will. Idle buckets are swept so the map cannot grow without bound |
+| Request bodies | Non-multipart bodies are rejected above `MAX_REQUEST_BODY_MB` before routing; uploads stream through their own byte counter |
+| Audit budget | `AUDIT_TIMEOUT_SECONDS` wall clock; unfinished checks are reported as skipped and cannot mark anything resolved |
+| Finding bounds | Each check is capped (100 findings, 25 for configuration) and states the cap in limitations |
 | Workspace | `WORKSPACE_ROOT/{repo_id}/repo` (immutable) and `/patch` (drafts, exports) |
 | Cleanup | Deleted on `DELETE /repositories/{id}`, on TTL expiry, and by a sweep on access |
 | Audit history | In memory per session; a backend restart clears it (no database in v1.0) |
