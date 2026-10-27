@@ -13,6 +13,7 @@ import { expect, test } from "./fixtures";
  *  44-46 drawer makes the shell inert and releases it
  *  47-49 360 px finding detail, patch, and settings
  *  50    global search reflects the active ?q=
+ *  51    persisted audit history is visible on the overview
  *  4-21  six workspace routes: title, no horizontal overflow, headings present
  *  22-24 overview labels (indexed files, limitations, no stale wording)
  *  25    findings URL state (?status= and ?q=)
@@ -158,6 +159,9 @@ test("overview labels report indexed files and limitations honestly", async ({
 }) => {
   await page.goto(`/r/${fixtures.repository.id}`);
   await expect(page.getByRole("heading", { name: "Repository overview" })).toBeVisible();
+
+  // 51: persisted audit history is visible on the overview.
+  await expect(page.getByRole("heading", { name: "Audit history" })).toBeVisible();
 
   const text = await page.locator("body").innerText();
 

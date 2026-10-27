@@ -89,6 +89,15 @@ export interface AuditSummary {
   dismissed: number;
 }
 
+export interface AuditDelta {
+  previous_audit_id: string | null;
+  added: number;
+  fixed: number;
+  unchanged: number;
+  added_findings: Finding[];
+  fixed_findings: Finding[];
+}
+
 export interface AuditRun {
   id: string;
   repository_id: string;
@@ -97,6 +106,15 @@ export interface AuditRun {
   checks_skipped: string[];
   summary: AuditSummary;
   findings: Finding[];
+  delta: AuditDelta | null;
+  created_at: string;
+}
+
+export interface AuditHistoryItem {
+  id: string;
+  status: "completed" | "partial" | "failed";
+  summary: AuditSummary;
+  delta: AuditDelta | null;
   created_at: string;
 }
 

@@ -1,4 +1,5 @@
 import { spawn, spawnSync } from "node:child_process";
+import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -24,6 +25,15 @@ function findPython() {
   return candidates.find(runs) ?? "python";
 }
 
+const dbPath =
+  process.env.REPOSCRIBE_DB_PATH ??
+  path.join(frontendDir, "e2e", ".generated-db", "state.db");
+// Start every E2E run from an empty durable store. The webServer starts before
+// globalSetup, so the reset has to happen here rather than in the fixture.
+for (const suffix of ["", "-wal", "-shm"]) {
+  fs.rmSync(dbPath + suffix, { force: true });
+}
+
 const python = findPython();
 const child = spawn(
   python,
@@ -35,6 +45,7 @@ const child = spawn(
       PYTHONUNBUFFERED: "1",
       WORKSPACE_ROOT:
         process.env.WORKSPACE_ROOT ?? path.join(frontendDir, "e2e", ".generated", "workspaces"),
+      REPOSCRIBE_DB_PATH: dbPath,
     },
     stdio: "inherit",
   },

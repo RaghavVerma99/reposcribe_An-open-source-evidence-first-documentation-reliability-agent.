@@ -99,7 +99,7 @@ links that the patch itself adds or changes; links that were already broken are 
 | Finding bounds | Each check is capped (100 findings, 25 for configuration) and states the cap in limitations |
 | Workspace | `WORKSPACE_ROOT/{repo_id}/repo` (immutable) and `/patch` (drafts, exports) |
 | Cleanup | Deleted on `DELETE /repositories/{id}`, on TTL expiry, and by a sweep on access |
-| Audit history | In memory per session; a backend restart clears it (no database in v1.0) |
+| Audit history | SQLite snapshots per run; restored on restart when the database path is on a persistent volume |
 | Finding identity | `sha256(check_id, primary_path, subject_key)[:12]`, excluding line numbers |
 
 ## Extension points

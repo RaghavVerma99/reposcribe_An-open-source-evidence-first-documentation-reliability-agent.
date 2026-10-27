@@ -493,7 +493,7 @@ Every analyzer MUST record patterns it could not interpret as limitations attach
 |---|---|---|
 | `Repository` | `id`, source type, name, status, counts, manifest summary | Session-scoped workspace |
 | `RepositoryOverview` | languages, file count, doc files, routes, scan metadata | Derived from index |
-| `AuditRun` | `id`, repository, checks run/skipped, summary, timestamps | In-memory, optional persisted |
+| `AuditRun` | `id`, repository, checks run/skipped, summary, delta, timestamps | Persisted per run in SQLite |
 | `Finding` | see §9.2 | Derived from audit |
 | `EvidenceRef` | path, lines, excerpt, role | Derived from files |
 | `PatchDraft` | `id`, finding, target path, original content, proposed content, diff, rationale | Session workspace |
@@ -1387,7 +1387,7 @@ Full suites; benchmark with real numbers; deploy; README; 1–3 minute recording
 | Phase | State | Evidence |
 |---|---|---|
 | 0 — Inspect and prove the integration | **Blocked** | The Alan contract is unverified; `docs/alan-integration.md` holds the open checklist. The demo-mode decision is recorded in `D-06`. |
-| 1 — Deterministic vertical slice | Done | Sample repository, safe inventory, all six checks, route mismatch with real lines; `136 passed` |
+| 1 — Deterministic vertical slice | Done | Sample repository, safe inventory, all six checks, route mismatch with real lines; `143 passed` |
 | 2 — Evidence and patch workflow | Done | Normalized findings, inspector, patch generation, diff, six-step validation, export |
 | 3 — Alan agent and grounded Q&A | Partial | Retrieval, citation verification, and provider errors are implemented and tested; the grounded Q&A path runs through the local demo provider. The live Alan call is not implemented. |
 | 4 — UI polish | Done | Seven screens, per-operation loading/empty/error/partial states, keyboard-visible focus, responsive down to 360 px, no inert controls |
@@ -1462,7 +1462,7 @@ Record the resolution, date, and rationale for each. Status reflects the current
 |---|---|---|---|
 | D-01 | API versioning | `/api/v1` prefix | Resolved |
 | D-02 | Session/auth model | Anonymous `HttpOnly` session cookie scoped to workspace | Resolved |
-| D-03 | Persistence | In-memory session state + on-disk workspace; no database in v1.0 | Resolved |
+| D-03 | Persistence | SQLite for repositories, findings, audit snapshots, patches, and deltas; disposable workspace; index rebuilt on demand | Resolved |
 | D-04 | Extraction limits | 20 MB upload, 5,000 files, 2 MB per file, 200 MB total | Resolved |
 | D-05 | License | MIT | Resolved (confirm before publishing publicly) |
 | D-06 | Alan product and open model | **Open.** The adapter is implemented but disabled; `verified_contract` is false and `/provider` reports it. Requires the Phase 0 gate (§21.2). | Blocked on external information |
@@ -1511,3 +1511,4 @@ Do not build these before users validate the core workflow.
 | 2.3 | 2026-10-26 | Corrected status and UI documentation to the implemented build: source version `0.3.0`, later tagged `v0.3.0`; true-black editorial tokens and self-hosted fonts in place of the proposed light theme; component inventory aligned with shipped modules. Recorded SPA deep-link fallback, secret-file exclusion from the index/manifest/counts, streaming upload limit, full route-template logging, last-access workspace TTL, the per-repository audit lock, and `133 passed` backend tests. |
 | 2.4 | 2026-10-26 | Moved the 39-check browser smoke pass into the repository as a 10-test Playwright suite (API-seeded fixtures, 360 px drawer and overflow coverage) and added it to CI alongside the backend and frontend jobs. Updated the shipped commands and the NFR-10 verification method; no product behavior changed. |
 | 2.5 | 2026-10-27 | Added the scroll-driven landing narrative and deployment configuration (Dockerfile, Render Blueprint, Vercel proxy). Fixed CHK-04 single-word variables and restoration of a finding's pre-dismissal status. CI passed on the tagged commit; `v0.3.0` is the first tag. |
+| 2.6 | 2026-10-27 | SQLite persistence for repositories, findings, audit snapshots, patches, and deltas; restart recovery with a lazy index rebuild; `GET /audits` history endpoint; persistent-volume requirement documented. `143 passed` backend tests. |

@@ -47,6 +47,10 @@ export default defineConfig({
       E2E_PORT: port,
       WORKSPACE_ROOT:
         process.env.WORKSPACE_ROOT ?? path.resolve("e2e/.generated/workspaces"),
+      // Kept outside .generated so global-setup can reset fixtures without
+      // unlinking the database the running server has open.
+      REPOSCRIBE_DB_PATH:
+        process.env.REPOSCRIBE_DB_PATH ?? path.resolve("e2e/.generated-db/state.db"),
       FRONTEND_ORIGIN: baseURL,
       MODEL_PROVIDER: "local_demo",
       REPOSCRIBE_LOG_LEVEL: "WARNING",

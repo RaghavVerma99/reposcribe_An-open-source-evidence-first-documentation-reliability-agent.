@@ -60,10 +60,37 @@ Then commit and push. A tag is optional; do not claim a release until CI is gree
 ### Free-plan caveats
 
 - The instance sleeps after inactivity; the first request afterwards is slow.
-- `/tmp` is ephemeral. Every restart clears sessions and workspaces, which is acceptable for a demo but not for
-  a persistent deployment.
-- One worker only. Do not raise `--workers`: in-memory sessions and a per-process `SESSION_SECRET` assume one
+- The free instance's filesystem is **ephemeral**. SQLite and workspaces are lost on sleep, restart, or deploy.
+  See [Persistence](#persistence) below.
+- One worker only. Do not raise `--workers`: the state cache and a per-process `SESSION_SECRET` assume one
   process.
+
+### Persistence
+
+RepoScribe stores durable state in SQLite at `REPOSCRIBE_DB_PATH` and repository files under
+`WORKSPACE_ROOT`. Both must be on a filesystem that survives a restart. The signed session cookie also needs a
+stable `SESSION_SECRET`, otherwise every restart issues new sessions.
+
+On a paid Render instance, add a disk to the service:
+
+```yaml
+    disk:
+      name: reposcribe-data
+      mountPath: /var/data
+      sizeGB: 1
+    envVars:
+      - key: REPOSCRIBE_DB_PATH
+        value: /var/data/reposcribe.db
+      - key: WORKSPACE_ROOT
+        value: /var/data/workspaces
+```
+
+Then a sleep or deploy restores repositories, findings, audit history, and patches from the database. The
+index is rebuilt from the workspace on first use. If the database survives but the workspace does not, history
+stays readable and re-auditing returns `410 repository_expired` until the repository is uploaded again.
+
+The free plan cannot attach a disk. For durable state there, use a paid instance, or replace the SQLite file
+with an external database (not implemented).
 
 ---
 
@@ -108,6 +135,7 @@ If any of these limits matter, deploy the Render service only and skip Vercel.
 | `REPOSCRIBE_LOG_LEVEL` | No | `INFO` |
 | `AUDIT_TIMEOUT_SECONDS` | No | `60` |
 | `WORKSPACE_TTL_MINUTES` | No | `120` |
+| `REPOSCRIBE_DB_PATH` | Yes for persistence | SQLite file on a restart-safe volume, e.g. `/var/data/reposcribe.db` |
 | `MAX_UPLOAD_MB` | No | `20` |
 | `MAX_CONCURRENT_WORKSPACES` | No | `32` on the public demo (the code default is 8) |
 | `BACKEND_ORIGIN` | Vercel only | The Render service URL |
@@ -122,6 +150,8 @@ Never put a secret in a `VITE_` variable: Vite inlines those into the browser bu
 |---|---|---|
 | `backend_unreachable` from Vercel | `BACKEND_ORIGIN` missing or wrong | Set it to the Render URL, redeploy |
 | Session resets on every request | Multiple workers or no shared `SESSION_SECRET` | Run one worker and set `SESSION_SECRET` |
+| History is empty after a deploy or sleep | SQLite is on an ephemeral filesystem | Move `REPOSCRIBE_DB_PATH` to a mounted disk (paid Render) |
+| `410 repository_expired` | The database survived but the workspace did not | Keep `WORKSPACE_ROOT` on the same persistent disk |
 | Cookie missing in production | `APP_ENV` is not `production` | Set `APP_ENV=production` and use HTTPS |
 | `413 payload_too_large` | Upload above `MAX_UPLOAD_MB`, or a JSON body above 1 MB | Raise the limit or use the ZIP upload path |
 | `429 rate_limited` | More than 120 requests/minute from one address | Wait, or use the Render URL directly |
@@ -134,10 +164,11 @@ Never put a secret in a `VITE_` variable: Vite inlines those into the browser bu
 
 Be explicit about these in any public demo:
 
-- Audit history is in memory; a restart clears it. Persistence is the next milestone.
+- Durable state requires a persistent disk. The free Render plan is ephemeral.
 - Workspaces are disposable and expire after two hours of inactivity.
 - The provider runs in `local_demo`; no live model is connected.
 - No benchmark has measured precision or recall yet.
-- No database, no accounts, and no multi-tenant isolation beyond the signed session cookie.
+- SQLite is the only store; there are no accounts, and no multi-tenant isolation beyond the signed
+  session cookie.
 
 These are roadmap items, not defects to hide.

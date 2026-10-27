@@ -8,7 +8,7 @@ drafts a minimal documentation patch that you review, validate, and export.
 inactivity may cold-start.
 
 **Status:** version `0.3.0`, tagged `v0.3.0`. `main` also contains post-tag fixes (audit items, UI,
-static delivery). 136 backend tests, 12 browser tests / 50 checks, CI green.
+static delivery, SQLite persistence). 143 backend tests, 12 browser tests / 51 checks, CI green.
 
 ---
 
@@ -24,6 +24,10 @@ RepoScribe separates **verification** from **assistance**:
 - The model only explains findings and drafts patches.
 - Every finding carries evidence; an unsupported claim is reported as `insufficient_evidence`, never
   as a defect.
+
+Repositories, findings, audit snapshots, patches, and per-run deltas are persisted in SQLite. The
+repository index is rebuilt from the workspace on demand, so a restart restores sessions and history
+without replaying an audit.
 
 ## Capabilities
 
@@ -64,7 +68,7 @@ FastAPI  (/api/v1)
         |      +--> local_demo (rules, default)
         |      +--> Alan adapter (disabled until the contract is verified)
         +--> Patch builder + validator
-        +--> Session and audit state (in memory)
+        +--> Durable state (SQLite) + disposable workspace
 ```
 
 The backend gathers facts, sends a bounded evidence bundle to the provider when one is enabled, and
@@ -113,6 +117,8 @@ All routes are under `/api/v1`. Errors are JSON with `code`, `message`, `request
 | `GET` | `/repositories/{id}/search` | Repository search |
 | `DELETE` | `/repositories/{id}` | Delete the repository and workspace |
 | `POST` | `/repositories/{id}/audits` | Run an audit (synchronous, time-budgeted) |
+| `GET` | `/repositories/{id}/audits` | Audit history with per-run deltas |
+| `GET` | `/repositories/{id}/audits/{audit_id}` | Full finding snapshot for one run |
 | `GET` | `/repositories/{id}/findings` | Filter by status, severity, check, query |
 | `GET` | `/repositories/{id}/findings/{finding_id}` | Finding detail; returns an `ETag` |
 | `PATCH` | `/repositories/{id}/findings/{finding_id}` | Change status; honours `If-Match`, returns `412` on a stale revision |
@@ -135,6 +141,7 @@ Values are read from the process environment; no `.env` file is auto-loaded. Use
 | `MODEL_PROVIDER` | `local_demo` | `alan` is blocked until its contract is verified |
 | `WORKSPACE_ROOT` | `./.reposcribe-workspaces` | Disposable per-repository workspaces |
 | `WORKSPACE_TTL_MINUTES` | `120` | Idle workspace expiry |
+| `REPOSCRIBE_DB_PATH` | `./.reposcribe/state.db` | Durable SQLite state; must be on a restart-safe filesystem |
 | `MAX_CONCURRENT_WORKSPACES` | `8` | Live workspaces per instance; further creations return `503`. The Render blueprint sets `32` |
 | `MAX_UPLOAD_MB` | `20` | Upload cap |
 | `AUDIT_TIMEOUT_SECONDS` | `60` | Time budget per audit |
@@ -147,14 +154,14 @@ documented in [`docs/alan-integration.md`](docs/alan-integration.md).
 
 ```powershell
 cd backend
-.\.venv\Scripts\python.exe -m pytest -q      # 136 passed
+.\.venv\Scripts\python.exe -m pytest -q      # 143 passed
 ```
 
 ```powershell
 cd frontend
 npm run typecheck                             # tsc --noEmit
 npm run build                                 # Vite production build
-npm run test:e2e                              # 12 tests, 50 checks
+npm run test:e2e                              # 12 tests, 51 checks
 ```
 
 The Playwright suite covers route titles and headings, self-hosted fonts, the landing layout at
@@ -167,8 +174,9 @@ CI runs the backend, frontend, and end-to-end jobs on every push and pull reques
 
 ## Deployment
 
-One long-lived FastAPI process serves `/api/v1` and the built UI, because sessions and workspaces are
-held in memory. Run one worker: sessions and the generated `SESSION_SECRET` are per process.
+One long-lived FastAPI process serves `/api/v1` and the built UI. Durable state lives in SQLite and
+workspaces on disk, so both paths must be on a restart-safe filesystem. Run one worker: the state cache
+and the generated `SESSION_SECRET` are per process.
 
 | Target | Contents |
 |---|---|
@@ -176,8 +184,10 @@ held in memory. Run one worker: sessions and the generated `SESSION_SECRET` are 
 | **Vercel** | `vercel.json` + `api/proxy.js`: static UI with a same-origin `/api/v1` proxy to Render |
 
 Render is the supported full deployment. Vercel functions impose a request-body limit and a duration
-limit, so large uploads and long audits belong on Render. Step-by-step instructions, environment
-variables, and failure modes: [`docs/deploy.md`](docs/deploy.md).
+limit, so large uploads and long audits belong on Render. On a Render free instance the filesystem is
+ephemeral: attach a persistent disk (paid) and point `REPOSCRIBE_DB_PATH` and `WORKSPACE_ROOT` at it to
+keep sessions and history across sleep and deploys. Step-by-step instructions, the disk configuration,
+environment variables, and failure modes: [`docs/deploy.md`](docs/deploy.md).
 
 Static delivery: hashed bundles under `/assets` and `/fonts` are cached for one year as immutable; the
 HTML shell is `no-cache` so a deploy never leaves a stale document pointing at removed assets.
@@ -200,11 +210,12 @@ HTML shell is `no-cache` so a deploy never leaves a stale document pointing at r
 - Python and FastAPI only, and only statically resolvable decorator routes.
 - Patch generation is implemented for route, internal-link, and symbol findings; other findings need a
   human.
-- Audit state is in memory per session; a restart clears it. Workspaces expire after the TTL.
+- State is only as durable as the filesystem: a restart restores history when `REPOSCRIBE_DB_PATH` is on
+  a persistent volume. Without the workspace, history stays readable but re-auditing returns `410`.
 - No benchmark has been run, so no precision, recall, or timing figures are published. The procedure is
   defined in [`docs/evaluation.md`](docs/evaluation.md).
 - The provider runs in `local_demo`; no live model is connected.
-- No GitHub import, PR checks, or persistent audit history yet.
+- No GitHub import or PR checks yet.
 
 ## Sample repository
 
@@ -219,7 +230,7 @@ a broken link, an undefined `REDIS_URL`, an unknown symbol, and a missing licens
 |---|---|
 | Next | Benchmark harness with measured recall and false-positive rate; coverage gate |
 | Next | Public GitHub import, then diff-aware scans and a CLI (`reposcribe check --base`) |
-| Then | Persistent audit history, regression deltas, and a GitHub Action PR comment |
+| Then | GitHub Action PR comment with the per-run delta, and diff-aware scans |
 | Then | OpenAPI-first route detection and a `RouteSource` abstraction |
 | Later | Policy files, analyzer plugins, additional languages |
 

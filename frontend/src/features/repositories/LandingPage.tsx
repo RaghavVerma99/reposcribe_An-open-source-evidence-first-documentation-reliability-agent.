@@ -734,7 +734,7 @@ export default function LandingPage() {
               { value: 6, label: "deterministic checks" },
               { value: 0, label: "files modified" },
               { value: 0, label: "uncited conclusions" },
-              { value: 136, label: "backend tests" },
+              { value: 143, label: "backend tests" },
             ].map((stat) => (
               <div key={stat.label} className="border-r border-line/70 px-4 py-8 last:border-r-0">
                 <p className="font-display text-[38px] font-bold leading-none tracking-[-0.06em] text-ink sm:text-[42px]">

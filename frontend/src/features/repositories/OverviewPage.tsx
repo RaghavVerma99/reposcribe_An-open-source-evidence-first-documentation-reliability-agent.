@@ -34,6 +34,10 @@ export default function OverviewPage() {
   const { repository, reloadRepository } = useShell();
   const navigate = useNavigate();
   const overview = useAsync(() => api.overview(repository.id), [repository.id]);
+  const history = useAsync(
+    () => api.auditHistory(repository.id),
+    [repository.id, repository.last_audit_at],
+  );
   const [auditing, setAuditing] = useState(false);
   const [auditError, setAuditError] = useState<ApiError | null>(null);
   usePageTitle(`${repository.name} overview`);
@@ -203,6 +207,52 @@ export default function OverviewPage() {
             </div>
           </Card>
         )}
+
+        {history.state.status === "success" && history.state.data?.length ? (
+          <section aria-labelledby="audit-history-heading">
+            <div className="mb-3 flex flex-wrap items-end justify-between gap-2">
+              <div>
+                <h2 id="audit-history-heading" className="eyebrow">
+                  Audit history
+                </h2>
+                <p className="mt-1 text-[11px] text-ink-faint">
+                  Active findings added or fixed against the previous run.
+                </p>
+              </div>
+              <span className="font-mono text-[9px] uppercase tracking-[0.14em] text-ink-faint">
+                {history.state.data.length} run{history.state.data.length === 1 ? "" : "s"}
+              </span>
+            </div>
+            <Card padded={false} className="overflow-hidden">
+              <ul>
+                {history.state.data.slice(0, 6).map((run) => (
+                  <li
+                    key={run.id}
+                    className="flex flex-wrap items-center gap-x-4 gap-y-1 border-b border-line px-5 py-3 last:border-b-0"
+                  >
+                    <span className="font-mono text-[10px] tabular-nums text-ink-faint">
+                      {relativeTime(run.created_at)}
+                    </span>
+                    <span className="text-[12.5px] text-ink">
+                      {formatNumber(run.summary.findings_active_total)} active
+                    </span>
+                    <span className="font-mono text-[9px] uppercase tracking-[0.12em] text-ink-faint">
+                      {run.status}
+                    </span>
+                    <span className="ml-auto flex items-center gap-3 font-mono text-[10px] tabular-nums">
+                      <span className="text-signal-lime" title="New since previous audit">
+                        +{run.delta?.added ?? 0}
+                      </span>
+                      <span className="text-signal-coral" title="Fixed since previous audit">
+                        −{run.delta?.fixed ?? 0}
+                      </span>
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </Card>
+          </section>
+        ) : null}
 
         <div className="grid gap-6 xl:grid-cols-2">
           <Card padded={false} className="overflow-hidden">

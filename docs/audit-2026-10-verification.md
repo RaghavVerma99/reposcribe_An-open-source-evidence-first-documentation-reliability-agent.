@@ -22,10 +22,10 @@ snapshot, not a production release.
 
 | Gate | Result |
 |---|---|
-| Backend `pytest -q` | **136 passed** (one warning, ~72 s) |
+| Backend `pytest -q` | **143 passed** (one warning, ~45 s) |
 | Frontend `npm run typecheck` | clean |
 | Frontend `npm run build` | clean |
-| Playwright `npm run test:e2e` | **12 passed / 50 checks** |
+| Playwright `npm run test:e2e` | **12 passed / 51 checks** |
 | Version literals | `0.3.0` consistent in `pyproject.toml`, `package.json`, `main.py`, `health.py`, `README.md`, `SPEC.md` |
 | Git tags | **`v0.3.0`** (on the commit that passed CI) |
 

@@ -1,5 +1,6 @@
 import type {
   ApiErrorBody,
+  AuditHistoryItem,
   AuditRun,
   Finding,
   FindingPage,
@@ -124,6 +125,9 @@ export const api = {
     query.set("limit", String(params.limit ?? 50));
     return request<FindingPage>(`/repositories/${repositoryId}/findings?${query.toString()}`);
   },
+
+  auditHistory: (repositoryId: string) =>
+    request<AuditHistoryItem[]>(`/repositories/${repositoryId}/audits`),
 
   finding: (repositoryId: string, findingId: string) =>
     request<Finding>(`/repositories/${repositoryId}/findings/${findingId}`),
