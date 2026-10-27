@@ -47,7 +47,7 @@ contradictions in the documentation you already have.
 - Minimal Markdown patch generation, unified diff, six-step validation, and safe export.
 - Finding lifecycle: verified, needs review, insufficient evidence, resolved after a rescan, dismissed.
 - Provider interface with an honest local demo provider, plus an Alan adapter that refuses to pretend.
-- 133 backend tests across unit, integration, and security suites (one built-SPA check skips until
+- 136 backend tests across unit, integration, and security suites (one built-SPA check skips until
   `frontend/dist` exists).
 
 **Planned**
@@ -159,14 +159,14 @@ cd frontend
 npm run test:e2e
 ```
 
-The Playwright suite runs 11 tests covering 42 checks: route titles and headings, self-hosted fonts, the landing
+The Playwright suite runs 12 tests covering 50 checks: route titles and headings, self-hosted fonts, the landing
 narrative at 1440 px, 360 px, and under reduced motion, no horizontal overflow, URL filter state, grounded Ask
 answers, the finding dismiss/reopen lifecycle, the mobile drawer focus trap, no external requests, and a clean
 console. It uses installed Google Chrome by default. To
 use Playwright's Chromium instead, run `npm run test:e2e:install` once and then set `PLAYWRIGHT_CHANNEL=chromium`.
 
 Last observed run in this build: `133 passed` (backend; one built-SPA check skips when `frontend/dist` has not
-been built), `tsc --noEmit` and `vite build` clean (frontend), and `11 passed` (Playwright, 42 checks). The CI
+been built), `tsc --noEmit` and `vite build` clean (frontend), and `12 passed` (Playwright, 50 checks). The CI
 workflow is configured to run the backend, frontend, and end-to-end jobs on every push and pull request to
 `main`.
 
@@ -234,6 +234,8 @@ timing figures are published here.** Product claims must not precede measured nu
 - Requests are capped per client address (not by the session cookie, which a client can mint at will), JSON
   bodies are capped at 1 MB, every audit runs inside a time budget, and each check reports at most 100
   findings and says so when it caps.
+- At most `MAX_CONCURRENT_WORKSPACES` (default 8) repositories are live per instance; further creations return
+  503 rather than exhausting disk. Concurrent status changes are guarded by a revision `ETag` and `If-Match`.
 
 ## Known limitations
 

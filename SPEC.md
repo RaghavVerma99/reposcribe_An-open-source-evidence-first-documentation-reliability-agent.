@@ -1387,7 +1387,7 @@ Full suites; benchmark with real numbers; deploy; README; 1–3 minute recording
 | Phase | State | Evidence |
 |---|---|---|
 | 0 — Inspect and prove the integration | **Blocked** | The Alan contract is unverified; `docs/alan-integration.md` holds the open checklist. The demo-mode decision is recorded in `D-06`. |
-| 1 — Deterministic vertical slice | Done | Sample repository, safe inventory, all six checks, route mismatch with real lines; `133 passed` |
+| 1 — Deterministic vertical slice | Done | Sample repository, safe inventory, all six checks, route mismatch with real lines; `136 passed` |
 | 2 — Evidence and patch workflow | Done | Normalized findings, inspector, patch generation, diff, six-step validation, export |
 | 3 — Alan agent and grounded Q&A | Partial | Retrieval, citation verification, and provider errors are implemented and tested; the grounded Q&A path runs through the local demo provider. The live Alan call is not implemented. |
 | 4 — UI polish | Done | Seven screens, per-operation loading/empty/error/partial states, keyboard-visible focus, responsive down to 360 px, no inert controls |

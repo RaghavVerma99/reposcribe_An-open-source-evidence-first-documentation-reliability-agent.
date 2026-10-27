@@ -22,10 +22,10 @@ snapshot, not a production release.
 
 | Gate | Result |
 |---|---|
-| Backend `pytest -q` | **133 passed** (one warning, ~18 s) |
+| Backend `pytest -q` | **136 passed** (one warning, ~72 s) |
 | Frontend `npm run typecheck` | clean |
 | Frontend `npm run build` | clean |
-| Playwright `npm run test:e2e` | **11 passed / 42 checks** |
+| Playwright `npm run test:e2e` | **12 passed / 50 checks** |
 | Version literals | `0.3.0` consistent in `pyproject.toml`, `package.json`, `main.py`, `health.py`, `README.md`, `SPEC.md` |
 | Git tags | **`v0.3.0`** (on the commit that passed CI) |
 
@@ -50,7 +50,7 @@ snapshot, not a production release.
 | P1-9 CHK-02 over-suppression | Closed | `repo|repository` removed from the existing-file hints |
 | P1-10 single-word env vars | Closed in this pass | `T1` |
 | P1-11 SPA deep links | Closed | Non-API HTML requests fall back to `index.html` |
-| P1-12 provider labelling | Partially closed | Landing page is correct; `T3` still open in the finding detail |
+| P1-12 provider labelling | Closed | Landing page and finding detail distinguish `live`, `local_demo`, and `unavailable` (`T3`) |
 | D1–D5 abuse controls | Closed | Body gate, finding caps, audit timeout, incomplete-check handling, signed session cookie |
 
 ## 4. Fixed in this pass
@@ -63,20 +63,28 @@ snapshot, not a production release.
 CHK-04 deliberately does not report `GET`, `POST`, or `JSON` that appear in an API table, because those tokens
 fail the configuration-context test. A regression test covers both directions.
 
+### Fixed in the Phase 1 sweep
+
+| ID | Defect | Fix | Evidence |
+|---|---|---|---|
+| `T3` | An `unavailable` provider was labelled "Demo mode" | Three-way branch: `live`, `local_demo`, `unavailable` (with the provider message) | `frontend/src/features/audits/FindingDetailPage.tsx`, `frontend/e2e/smoke.spec.ts` |
+| `T4` (`B9`) | `findings_total` counted resolved and dismissed forever | Added `findings_active_total` to the repository, overview, and audit summary; the overview headline uses it and names the all-time total | `backend/app/schemas/models.py`, `backend/app/services/audit_service.py`, `backend/app/services/repository_service.py`, `frontend/src/features/repositories/OverviewPage.tsx` |
+| `T5` (`B7`) | Concurrent status changes overwrote each other silently | Findings carry a `revision`; `GET` returns an `ETag`, `PATCH` honours `If-Match`, and a stale value returns 412 `precondition_failed` | `backend/app/api/findings.py`, `backend/app/services/audit_service.py`, `frontend/src/lib/api.ts` |
+| `T6` | `Route.prefix_resolved` was hardcoded `True` and carried no information | Removed the per-route field; the aggregate `routes_prefix_unresolved` is the only completeness signal | `backend/app/schemas/models.py`, `backend/app/analyzers/common.py`, `backend/app/services/repository_service.py` |
+| `T10` | The specified 8-workspace cap was absent | `MAX_CONCURRENT_WORKSPACES` (default 8) with a reservation counter that also covers in-flight creation; 503 when exhausted | `backend/app/core/settings.py`, `backend/app/services/store.py`, `backend/tests/integration/test_abuse_controls.py` |
+| `T11` | The drawer left the background reachable to assistive technology; four routes were untested at 360 px | The shell is `inert` and `aria-hidden` while the drawer is open, and the 360 px guard covers finding detail, patch, and settings | `frontend/src/components/layout/AppShell.tsx`, `frontend/e2e/smoke.spec.ts` |
+| `T12` | The global search box ignored the active `?q=` | TopBar mirrors the URL query into the controlled search input | `frontend/src/components/layout/TopBar.tsx`, `frontend/e2e/smoke.spec.ts` |
+
 ## 5. Still open
 
 | ID | Severity | Item | Where | Fix |
 |---|---|---|---|---|
-| `T3` | Low | An `unavailable` provider is rendered as "Demo mode" | `frontend/src/features/audits/FindingDetailPage.tsx:214` | Three-way branch: `live` / `local_demo` / `unavailable` |
-| `T4` (`B9`) | Low | `findings_total` includes resolved and dismissed forever | `backend/app/services/audit_service.py:112`, `backend/app/services/audit_service.py:165` | Add `findings_active_total`; use it for the headline metric |
-| `T5` (`B7`) | Low | No `ETag`/`If-Match` on `PATCH /findings/{id}` | `backend/app/api/findings.py:69` | Emit `ETag: <finding.id>`; return 412 on mismatch |
-| `T6` | Low | `Route.prefix_resolved` is hardcoded `True` | `backend/app/schemas/models.py:74`, `backend/app/analyzers/common.py:622` | Set `prefix_resolved=resolved` when emitting, or delete the field |
-| `T7` (`#13`) | Low | The manifest drops excluded files without a reason | `backend/app/schemas/models.py:48` | Add `excluded`/`reason`; keep secrets out of counts |
-| `T8` (`B10`) | Low | The sample id is hardcoded and only one sample exists | `backend/app/services/repository_service.py:43` | Discover samples from `settings.sample_root`; expose `GET /samples` |
-| `T9` (`B8`) | Low | Check labels are duplicated and divergent | `frontend/src/lib/format.ts:22`, `backend/app/services/audit_service.py:15` | Add `GET /api/v1/checks`; delete both maps |
-| `T10` | Low | The specified 8-workspace concurrency cap is absent | `backend/app/core/settings.py`, `backend/app/services/store.py` | Add `max_concurrent_workspaces` + semaphore; 503 when exhausted |
-| `T11` | Low | The drawer background is not `inert`; 360 px is untested on four routes | `frontend/src/components/layout/AppShell.tsx:126`, `frontend/e2e/smoke.spec.ts:276` | Add `inert`/`aria-hidden`; extend the 360 px test |
-| `T12` | Low | TopBar search does not reflect an active `?q=` | `frontend/src/components/layout/TopBar.tsx:66` | Pass `value` from search params |
+| `T7` (`#13`) | Low | The manifest drops excluded files without a reason | `backend/app/schemas/models.py:48` | Surface non-secret exclusions with a reason; keep secret paths out of the manifest |
+| `T8` (`B10`) | Low | The sample id is hardcoded and only one sample exists | `backend/app/services/repository_service.py:43` | Discover samples from a metadata file; expose `GET /samples` |
+| `T9` (`B8`) | Low | Check labels are duplicated and divergent | `frontend/src/lib/format.ts:22`, `backend/app/services/audit_service.py:15` | Add `GET /api/v1/checks` and consume it |
+
+`T7` is deliberately not a mechanical fix: the earlier privacy work removed secret paths from the manifest, so
+listing every excluded file would undo it. The fix must expose non-secret exclusions only.
 
 No High or Medium item is open.
 
