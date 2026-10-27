@@ -25,6 +25,7 @@ export interface Finding {
   title: string;
   summary: string;
   status: FindingStatus;
+  status_before_dismissal: FindingStatus | null;
   severity: Severity;
   confidence_note: string;
   documentation_claim: string | null;
@@ -72,6 +73,7 @@ export interface RepositoryOverview {
   last_audit_at: string | null;
   indexed_at: string | null;
   limitations: string[];
+  routes_prefix_unresolved: boolean;
 }
 
 export interface AuditSummary {

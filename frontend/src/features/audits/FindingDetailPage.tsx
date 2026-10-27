@@ -7,6 +7,7 @@ import { checkLabel, statusMeaning } from "../../lib/format";
 import { useShell } from "../../lib/shell";
 import { useAsync } from "../../lib/useAsync";
 import { usePageTitle } from "../../lib/usePageTitle";
+import type { Finding } from "../../lib/types";
 import { EvidenceList } from "../../components/evidence/EvidencePane";
 import {
   Button,
@@ -21,6 +22,16 @@ import {
 const secondaryLink =
   "inline-flex h-9 items-center rounded-control border border-line bg-surface px-4 text-[13px] font-medium text-ink transition-colors hover:border-line-strong hover:bg-surface-elevated";
 
+type ReopenStatus = "verified" | "needs_review" | "insufficient_evidence";
+
+/** Restore what the reviewer dismissed; never invent a stronger or weaker status. */
+function reopenStatus(finding: Finding): ReopenStatus {
+  const previous = finding.status_before_dismissal;
+  return previous === "verified" || previous === "insufficient_evidence"
+    ? previous
+    : "needs_review";
+}
+
 export default function FindingDetailPage() {
   const { repository } = useShell();
   const { findingId = "" } = useParams();
@@ -28,9 +39,7 @@ export default function FindingDetailPage() {
   const { provider } = useAppState();
   const finding = useAsync(() => api.finding(repository.id, findingId), [repository.id, findingId]);
   const [creating, setCreating] = useState(false);
-  const [statusBusy, setStatusBusy] = useState<"dismissed" | "verified" | "needs_review" | null>(
-    null,
-  );
+  const [statusBusy, setStatusBusy] = useState<ReopenStatus | "dismissed" | null>(null);
   const [actionError, setActionError] = useState<ApiError | null>(null);
   usePageTitle(finding.state.data ? finding.state.data.title : "Finding");
 
@@ -47,7 +56,9 @@ export default function FindingDetailPage() {
     }
   }
 
-  async function setStatus(status: "dismissed" | "verified" | "needs_review") {
+  async function setStatus(
+    status: "dismissed" | "verified" | "needs_review" | "insufficient_evidence",
+  ) {
     setStatusBusy(status);
     setActionError(null);
     try {
@@ -218,8 +229,8 @@ export default function FindingDetailPage() {
             <div className="mt-4 flex flex-wrap gap-2">
               {data.status === "dismissed" ? (
                 <Button
-                  onClick={() => setStatus("needs_review")}
-                  loading={statusBusy === "needs_review"}
+                  onClick={() => setStatus(reopenStatus(data))}
+                  loading={statusBusy === reopenStatus(data)}
                   disabled={statusBusy !== null}
                 >
                   Reopen finding

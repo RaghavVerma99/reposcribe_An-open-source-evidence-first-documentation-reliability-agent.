@@ -326,8 +326,21 @@ export default function OverviewPage() {
               title="Limitations"
               subtitle="Files or checks that could not be evaluated are reported, not guessed."
             />
-            {data.limitations.length ? (
+            {data.limitations.length || data.routes_prefix_unresolved ? (
               <ul className="scroll-region max-h-72 divide-y divide-line overflow-y-auto">
+                {data.routes_prefix_unresolved ? (
+                  <li className="flex gap-2.5 px-5 py-3 text-2xs leading-5 text-ink-muted">
+                    <span
+                      aria-hidden="true"
+                      className="mt-2 h-1 w-1 shrink-0 rounded-full bg-warn"
+                    />
+                    <span>
+                      At least one router prefix could not be resolved statically, so the route list
+                      above is incomplete. Documented routes that are not listed are reported as
+                      insufficient evidence, never as missing.
+                    </span>
+                  </li>
+                ) : null}
                 {data.limitations.map((limitation, index) => (
                   <li
                     key={index}

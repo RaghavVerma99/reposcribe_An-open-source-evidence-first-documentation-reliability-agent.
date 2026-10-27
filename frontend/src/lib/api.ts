@@ -46,7 +46,17 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   }
 
   const text = await response.text();
-  const payload = text ? JSON.parse(text) : undefined;
+  // A proxy or a crashed server can answer with HTML instead of JSON. Parsing
+  // that blindly throws a SyntaxError that hides the real status code.
+  let payload: unknown;
+  let parseFailed = false;
+  if (text) {
+    try {
+      payload = JSON.parse(text);
+    } catch {
+      parseFailed = true;
+    }
+  }
 
   if (!response.ok) {
     const body = payload as ApiErrorBody | undefined;
@@ -58,6 +68,17 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
       body?.error?.retryable ?? false,
     );
   }
+
+  if (parseFailed) {
+    throw new ApiError(
+      response.status,
+      "invalid_response",
+      "The server returned a response that is not valid JSON.",
+      response.headers.get("X-Request-ID") ?? "",
+      false,
+    );
+  }
+
   return payload as T;
 }
 

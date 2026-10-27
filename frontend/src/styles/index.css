@@ -2,6 +2,11 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Set before Tailwind loads so there is no white flash on first paint. */
+html {
+  background: #000000;
+}
+
 :root {
   color-scheme: dark;
   --canvas: #000000;

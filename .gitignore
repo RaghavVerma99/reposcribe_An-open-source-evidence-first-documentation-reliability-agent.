@@ -20,6 +20,11 @@ node_modules/
 frontend/dist/
 npm-debug.log*
 
+# Playwright
+frontend/playwright-report/
+frontend/test-results/
+frontend/e2e/.generated/
+
 # RepoScribe workspaces
 .reposcribe-workspaces/
 
