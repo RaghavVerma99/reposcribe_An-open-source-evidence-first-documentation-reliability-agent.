@@ -25,7 +25,7 @@ committed tree passes CI.
 | Backend `pytest -q` | **133 passed** (one warning, ~18 s) |
 | Frontend `npm run typecheck` | clean |
 | Frontend `npm run build` | clean |
-| Playwright `npm run test:e2e` | **10 passed / 39 checks** (~26 s) |
+| Playwright `npm run test:e2e` | **11 passed / 42 checks** |
 | Version literals | `0.3.0` consistent in `pyproject.toml`, `package.json`, `main.py`, `health.py`, `README.md`, `SPEC.md` |
 | Git tags | **none** |
 

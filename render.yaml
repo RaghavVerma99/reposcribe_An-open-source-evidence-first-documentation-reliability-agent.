@@ -1,0 +1,23 @@
+# Render Blueprint: one web service, one Docker image, no external database.
+# The FastAPI process serves the built Vite bundle and the /api/v1 routes.
+services:
+  - type: web
+    name: reposcribe
+    runtime: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /api/v1/health
+    autoDeploy: true
+    envVars:
+      - key: APP_ENV
+        value: production
+      - key: MODEL_PROVIDER
+        value: local_demo
+      - key: WORKSPACE_ROOT
+        value: /tmp/reposcribe-workspaces
+      - key: SESSION_SECRET
+        generateValue: true
+      - key: REPOSCRIBE_LOG_LEVEL
+        value: INFO
+      - key: AUDIT_TIMEOUT_SECONDS
+        value: "60"

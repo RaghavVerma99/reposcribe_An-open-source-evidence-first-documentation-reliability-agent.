@@ -119,6 +119,74 @@ summary:focus-visible,
   -webkit-overflow-scrolling: touch;
 }
 
+/* Landing narrative: a faint engineering grid that fades out before it ends. */
+.grid-lines {
+  background-image:
+    linear-gradient(to right, rgba(255, 255, 255, 0.032) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(255, 255, 255, 0.032) 1px, transparent 1px);
+  background-size: 72px 72px;
+  mask-image: radial-gradient(ellipse 72% 62% at 50% 0%, #000 10%, transparent 76%);
+  -webkit-mask-image: radial-gradient(ellipse 72% 62% at 50% 0%, #000 10%, transparent 76%);
+}
+
+/* An infinite strip of check names; duplicated content makes the loop seamless. */
+.ticker {
+  animation: ticker 42s linear infinite;
+}
+
+@keyframes ticker {
+  from {
+    transform: translate3d(0, 0, 0);
+  }
+  to {
+    transform: translate3d(-50%, 0, 0);
+  }
+}
+
+/* A slow light sweep across the specimen audit window. */
+.console-scan {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: -30%;
+  height: 30%;
+  pointer-events: none;
+  background: linear-gradient(to bottom, transparent, rgba(34, 197, 94, 0.07), transparent);
+  animation: console-scan 6.5s ease-in-out infinite;
+}
+
+@keyframes console-scan {
+  0% {
+    transform: translateY(0);
+    opacity: 0;
+  }
+  18% {
+    opacity: 1;
+  }
+  78% {
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(430%);
+    opacity: 0;
+  }
+}
+
+.caret {
+  animation: caret-blink 1.15s steps(1, end) infinite;
+}
+
+@keyframes caret-blink {
+  0%,
+  45% {
+    opacity: 1;
+  }
+  50%,
+  100% {
+    opacity: 0;
+  }
+}
+
 @layer components {
   .nav-pill {
     @apply rounded-full px-4 py-2 text-[13px] font-medium text-ink-muted transition-colors duration-150 hover:text-ink;
@@ -192,5 +260,14 @@ summary:focus-visible,
 
   .pulse-dot::after {
     animation: none !important;
+  }
+
+  .ticker,
+  .caret {
+    animation: none !important;
+  }
+
+  .console-scan {
+    display: none;
   }
 }

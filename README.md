@@ -159,15 +159,29 @@ cd frontend
 npm run test:e2e
 ```
 
-The Playwright suite runs 10 tests covering 39 checks: route titles and headings, self-hosted fonts, no horizontal
-overflow at 1440 px and 360 px, URL filter state, grounded Ask answers, the finding dismiss/reopen lifecycle, the
-mobile drawer focus trap, no external requests, and a clean console. It uses installed Google Chrome by default. To
+The Playwright suite runs 11 tests covering 42 checks: route titles and headings, self-hosted fonts, the landing
+narrative at 1440 px, 360 px, and under reduced motion, no horizontal overflow, URL filter state, grounded Ask
+answers, the finding dismiss/reopen lifecycle, the mobile drawer focus trap, no external requests, and a clean
+console. It uses installed Google Chrome by default. To
 use Playwright's Chromium instead, run `npm run test:e2e:install` once and then set `PLAYWRIGHT_CHANNEL=chromium`.
 
 Last observed run in this build: `133 passed` (backend; one built-SPA check skips when `frontend/dist` has not
-been built), `tsc --noEmit` and `vite build` clean (frontend), and `10 passed` (Playwright, 39 checks). The CI
+been built), `tsc --noEmit` and `vite build` clean (frontend), and `11 passed` (Playwright, 42 checks). The CI
 workflow is configured to run the backend, frontend, and end-to-end jobs on every push and pull request to
 `main`.
+
+## Deployment
+
+One FastAPI service serves both `/api/v1` and the built UI, so it must run as a single long-lived process:
+audit sessions and workspaces are held in memory. Render is the supported one-service target. Vercel can host
+the static UI with a same-origin proxy to that service.
+
+- `Dockerfile` — multi-stage build: the Vite bundle, then uvicorn with one worker.
+- `render.yaml` — Render Blueprint with the health check and required environment variables.
+- `vercel.json` + `api/proxy.js` — static UI plus a same-origin `/api/v1` proxy.
+- Step-by-step instructions, environment variables, and caveats: [`docs/deploy.md`](docs/deploy.md).
+
+Do not raise `--workers`: sessions and the generated `SESSION_SECRET` are per process.
 
 ## Sample repository walkthrough
 

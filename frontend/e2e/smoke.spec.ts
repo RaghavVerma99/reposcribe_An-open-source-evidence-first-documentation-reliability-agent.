@@ -3,10 +3,12 @@ import type { Page } from "@playwright/test";
 import { expect, test } from "./fixtures";
 
 /**
- * The original 39-check headless smoke pass, now repo-contained. Each numbered
- * comment maps to one check from that pass:
+ * The original 39-check headless smoke pass, now repo-contained, plus a landing
+ * layout guard at 1440 px, 360 px, and under reduced motion. Each numbered
+ * comment maps to one check from the original pass:
  *
  *  1-3   landing title, self-hosted fonts, heading font
+ *  40-42 landing narrative: desktop, mobile, and reduced-motion layout
  *  4-21  six workspace routes: title, no horizontal overflow, headings present
  *  22-24 overview labels (indexed files, limitations, no stale wording)
  *  25    findings URL state (?status= and ?q=)
@@ -67,6 +69,28 @@ test("landing page renders the editorial shell", async ({ page }) => {
     return getComputedStyle(element).fontFamily;
   });
   expect.soft(headingFont, "heading font computed").toMatch(/Bricolage/i);
+});
+
+test("landing narrative holds its layout across widths and reduced motion", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto("/");
+  await expect(page.locator("h1").first()).toBeVisible();
+  await expectNoHorizontalOverflow(page, "landing at 1440");
+
+  await page.locator("#drift").scrollIntoViewIfNeeded();
+  await expect(
+    page.getByRole("heading", { name: /A doc line and a code line disagree/i }),
+  ).toBeVisible();
+
+  await page.setViewportSize({ width: 360, height: 800 });
+  await page.goto("/");
+  await expect(page.locator("h1").first()).toBeVisible();
+  await expectNoHorizontalOverflow(page, "landing at 360");
+
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.reload();
+  await expect(page.locator("h1")).toContainText("Docs drift");
+  await expectNoHorizontalOverflow(page, "landing with reduced motion");
 });
 
 test("workspace routes have titles, headings, and no horizontal overflow", async ({

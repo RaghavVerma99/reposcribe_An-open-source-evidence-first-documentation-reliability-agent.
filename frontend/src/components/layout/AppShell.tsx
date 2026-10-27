@@ -1,5 +1,5 @@
 import { Suspense, useEffect, useRef, useState } from "react";
-import { Link, Outlet, useNavigate, useParams } from "react-router-dom";
+import { Link, Outlet, useLocation, useNavigate, useParams } from "react-router-dom";
 
 import { useAppState } from "../../app/AppState";
 import { api } from "../../lib/api";
@@ -16,6 +16,7 @@ export default function AppShell() {
   const { repositoryId = "" } = useParams();
   const { provider } = useAppState();
   const navigate = useNavigate();
+  const location = useLocation();
   const [navOpen, setNavOpen] = useState(false);
   const repository = useAsync(() => api.repository(repositoryId), [repositoryId]);
   const dialogRef = useRef<HTMLDivElement>(null);
@@ -179,8 +180,12 @@ export default function AppShell() {
             </button>
           }
         />
-        <main id="workspace-main" className="flex-1">
-          <div className="mx-auto w-full max-w-[1320px]">
+        <main id="workspace-main" className="relative flex-1">
+          <div
+            aria-hidden="true"
+            className="pointer-events-none absolute inset-x-0 top-0 h-64 bg-[radial-gradient(58%_100%_at_50%_0%,rgba(34,197,94,0.045),transparent_72%)]"
+          />
+          <div className="relative mx-auto w-full max-w-[1320px]">
             <Suspense
               fallback={
                 <div className="flex items-center gap-2 p-6 text-[13px] text-ink-muted sm:p-8">
@@ -188,7 +193,9 @@ export default function AppShell() {
                 </div>
               }
             >
-              <Outlet context={{ repository: data, reloadRepository: repository.reload }} />
+              <div key={location.pathname} className="animate-fade-up">
+                <Outlet context={{ repository: data, reloadRepository: repository.reload }} />
+              </div>
             </Suspense>
           </div>
         </main>
