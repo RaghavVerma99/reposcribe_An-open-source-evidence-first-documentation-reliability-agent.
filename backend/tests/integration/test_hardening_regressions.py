@@ -105,10 +105,16 @@ def test_single_service_spa_deep_links_and_api_404s(client) -> None:
     if not (dist / "index.html").is_file():
         pytest.skip("frontend/dist is not built")
 
+    root = client.get("/")
+    assert root.status_code == 200
+    assert "text/html" in root.headers["content-type"]
+    # The shell must revalidate after every deploy, including the root path,
+    # which StaticFiles serves without an "index.html" path argument.
+    assert root.headers["cache-control"] == "no-cache"
+
     deep_link = client.get("/r/repo_unused/findings")
     assert deep_link.status_code == 200
     assert "text/html" in deep_link.headers["content-type"]
-    # The shell must revalidate after every deploy.
     assert deep_link.headers["cache-control"] == "no-cache"
 
     assets = sorted((dist / "assets").glob("*.js"))

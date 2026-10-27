@@ -130,7 +130,10 @@ class SPAStaticFiles(StaticFiles):
     def _with_cache(response, path: str):
         """Hashed assets are immutable; the shell must always revalidate."""
         normalized = path.replace("\\", "/")
-        if normalized.endswith(".html"):
+        content_type = response.headers.get("content-type", "")
+        # StaticFiles serves the shell for "" or "." as well as index.html, so
+        # the content type is the reliable signal, not the request path.
+        if content_type.startswith("text/html") or normalized.endswith(".html"):
             response.headers["Cache-Control"] = "no-cache"
         elif normalized.startswith("assets/") or normalized.startswith("fonts/"):
             response.headers["Cache-Control"] = "public, max-age=31536000, immutable"
