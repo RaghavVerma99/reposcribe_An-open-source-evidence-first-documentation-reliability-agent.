@@ -15,8 +15,8 @@ longer describe the working tree.
 The deterministic core is real and the gates are green. The earlier P0 and P1 findings are closed in the working
 tree, and two remaining user-visible defects were fixed in this pass (`T1`, `T2`).
 
-The product is not yet a release: the working tree is not committed and no git tag exists. Do not tag before the
-committed tree passes CI.
+The working tree is committed, pushed, and CI passed on `5d5bab2`. `v0.3.0` is the first tag; it is an MVP
+snapshot, not a production release.
 
 ## 2. Gate status
 
@@ -27,14 +27,14 @@ committed tree passes CI.
 | Frontend `npm run build` | clean |
 | Playwright `npm run test:e2e` | **11 passed / 42 checks** |
 | Version literals | `0.3.0` consistent in `pyproject.toml`, `package.json`, `main.py`, `health.py`, `README.md`, `SPEC.md` |
-| Git tags | **none** |
+| Git tags | **`v0.3.0`** (on the commit that passed CI) |
 
 ## 3. Closed since the 2026-10-26 snapshot
 
 | Area | State | Evidence |
 |---|---|---|
 | P0-1 request logging | Closed | Full route templates are logged; the integration test passes |
-| P0-2 version story | Closed | One value (`0.3.0`) across artifacts and docs; no tag is claimed |
+| P0-2 version story | Closed | One value (`0.3.0`) across artifacts and docs; `v0.3.0` tagged after CI passed |
 | P0-3 landing fabrications | Closed | No Alan/open-model claim, mock analyses, metrics, or testimonial |
 | P0-4 mobile navigation | Closed | Hamburger reachable below `lg`; drawer closes on navigation; all sidebar routes exist |
 | P0-5 inert controls | Closed | Search filters findings; no `href="#"` or no-op buttons remain |

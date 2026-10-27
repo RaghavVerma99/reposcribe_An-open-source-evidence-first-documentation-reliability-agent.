@@ -7,8 +7,8 @@ prepares a minimal Markdown repair that you review, validate, and export.
 **Screenshot / recording:** not committed in this build. Record one locally with the demo script in
 `docs/demo-script.md` before publishing; do not add placeholder media.
 
-**Current status:** MVP source version `0.3.0`, implemented and tested. No git tag exists for this build;
-`0.3.0` is an implementation version, not a published release. Model-assisted phrasing runs in a clearly labelled
+**Current status:** MVP source version `0.3.0`, implemented and tested, tagged `v0.3.0` after CI passed on
+2026-10-27. The tag is the first reproducible snapshot, not a production release. Model-assisted phrasing runs in a clearly labelled
 local demo mode. The Alan adapter is present but disabled until the integration contract is verified — see
 [Alan integration](#alan-ai-integration).
 **Open issues and what got into each milestone** are tracked in [`docs/audit-2026-10.md`](docs/audit-2026-10.md).
