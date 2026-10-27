@@ -58,11 +58,12 @@ export default function FindingDetailPage() {
 
   async function setStatus(
     status: "dismissed" | "verified" | "needs_review" | "insufficient_evidence",
+    revision: number,
   ) {
     setStatusBusy(status);
     setActionError(null);
     try {
-      await api.updateFinding(repository.id, findingId, status);
+      await api.updateFinding(repository.id, findingId, status, revision);
       finding.reload();
     } catch (caught) {
       setActionError(caught as ApiError);
@@ -222,14 +223,19 @@ export default function FindingDetailPage() {
           <Card className="px-5 py-4">
             <h2 className="text-h3 text-ink">Reviewer actions</h2>
             <p className="body-text mt-3">
-              {provider?.mode === "live"
-                ? "A live provider drafts the patch text from the evidence above."
-                : "Demo mode drafts the patch with deterministic rules derived from this finding's evidence."}
+              {!provider
+                ? "Checking the provider before drafting…"
+                : provider.mode === "live"
+                  ? "A live provider drafts the patch text from the evidence above."
+                  : provider.mode === "unavailable"
+                    ? provider.message ||
+                      "The provider is unavailable. Drafts come from the deterministic rules only."
+                    : "Demo mode drafts the patch with deterministic rules derived from this finding's evidence."}
             </p>
             <div className="mt-4 flex flex-wrap gap-2">
               {data.status === "dismissed" ? (
                 <Button
-                  onClick={() => setStatus(reopenStatus(data))}
+                  onClick={() => setStatus(reopenStatus(data), data.revision)}
                   loading={statusBusy === reopenStatus(data)}
                   disabled={statusBusy !== null}
                 >
@@ -238,7 +244,7 @@ export default function FindingDetailPage() {
               ) : (
                 <Button
                   variant="danger"
-                  onClick={() => setStatus("dismissed")}
+                  onClick={() => setStatus("dismissed", data.revision)}
                   loading={statusBusy === "dismissed"}
                   disabled={statusBusy !== null}
                 >

@@ -90,7 +90,9 @@ def test_cross_module_prefix_does_not_poison_unrelated_routes(tmp_path) -> None:
 
     index = build_index(tmp_path)
     assert index.route_prefix_unresolved is False
-    assert all(route.prefix_resolved for route in index.routes)
+    # Routes are emitted at their resolved path; unresolved ones are omitted and
+    # reported through the aggregate `route_prefix_unresolved` flag.
+    assert ("GET", "/api/v1/users") in {(route.method, route.path) for route in index.routes}
 
 
 def test_documented_cross_module_route_produces_no_finding(client) -> None:

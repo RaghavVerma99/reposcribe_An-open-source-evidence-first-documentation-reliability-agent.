@@ -73,6 +73,7 @@ export default function OverviewPage() {
   const data = overview.state.data;
   const byStatus = data.findings_by_status;
   const totalFindings = Object.values(byStatus).reduce((sum, value) => sum + value, 0);
+  const activeFindings = data.findings_active_total;
   const verifiedCount = byStatus.verified ?? 0;
   const hasAudit = repository.last_audit_at !== null;
   const maxLanguage = Math.max(1, ...Object.values(data.languages));
@@ -120,9 +121,13 @@ export default function OverviewPage() {
           </div>
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
             <Stat
-              label="Findings"
-              value={formatNumber(totalFindings)}
-              hint={hasAudit ? `last audit ${relativeTime(repository.last_audit_at)}` : "no audit yet"}
+              label="Active findings"
+              value={formatNumber(activeFindings)}
+              hint={
+                hasAudit
+                  ? `${formatNumber(totalFindings)} all-time · last audit ${relativeTime(repository.last_audit_at)}`
+                  : "no audit yet"
+              }
               emphasis={hasAudit}
             />
             <Stat

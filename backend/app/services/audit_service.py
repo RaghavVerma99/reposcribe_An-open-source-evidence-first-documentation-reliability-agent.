@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import time
 import uuid
+from collections.abc import Iterable
 
 from app.analyzers.factory import AnalyzerResult, deadline_expired, make_finding
 from app.analyzers.registry import CHECKS_SUPPORTED, get_analyzer
@@ -110,6 +111,7 @@ class AuditService:
         summary = AuditSummary(
             files_inspected=state.index.scanned_files,
             findings_total=len(findings),
+            findings_active_total=_active_total(findings.values()),
             verified=sum(1 for f in findings.values() if f.status == "verified"),
             needs_review=sum(1 for f in findings.values() if f.status == "needs_review"),
             insufficient_evidence=sum(1 for f in findings.values() if f.status == "insufficient_evidence"),
@@ -151,10 +153,18 @@ class AuditService:
                 if finding.status != "dismissed"
                 else finding.status_before_dismissal
             )
-            update = {"status": "dismissed", "status_before_dismissal": previous}
+            update = {
+                "status": "dismissed",
+                "status_before_dismissal": previous,
+                "revision": finding.revision + 1,
+            }
         else:
             state.dismissed.discard(finding_id)
-            update = {"status": status, "status_before_dismissal": None}
+            update = {
+                "status": status,
+                "status_before_dismissal": None,
+                "revision": finding.revision + 1,
+            }
         updated = finding.model_copy(update=update)
         state.findings[finding_id] = updated
         for audit in state.audits.values():
@@ -168,10 +178,16 @@ def _sort_key(finding: Finding):
     return (severity_order.get(finding.severity, 9), finding.check_id, finding.id)
 
 
+def _active_total(findings: Iterable[Finding]) -> int:
+    """Findings that still need attention, excluding resolved and dismissed."""
+    return sum(1 for finding in findings if finding.status not in ("resolved", "dismissed"))
+
+
 def _recount(findings: list[Finding], files_inspected: int) -> AuditSummary:
     return AuditSummary(
         files_inspected=files_inspected,
         findings_total=len(findings),
+        findings_active_total=_active_total(findings),
         verified=sum(1 for f in findings if f.status == "verified"),
         needs_review=sum(1 for f in findings if f.status == "needs_review"),
         insufficient_evidence=sum(1 for f in findings if f.status == "insufficient_evidence"),

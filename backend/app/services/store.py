@@ -9,6 +9,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from app.analyzers.common import RepoIndex
+from app.core.errors import AppError
 from app.core.settings import Settings
 from app.schemas.models import (
     AuditRun,
@@ -59,12 +60,33 @@ class Store:
     def __init__(self, settings: Settings) -> None:
         self._settings = settings
         self._repos: dict[str, RepositoryState] = {}
+        # Workspaces being built but not yet registered. Counting them closes
+        # the race between two concurrent uploads both passing the check.
+        self._pending = 0
         self._lock = threading.RLock()
+
+    def reserve(self) -> None:
+        """Claim a slot before copying or extracting a workspace."""
+        self.sweep_expired()
+        with self._lock:
+            if len(self._repos) + self._pending >= self._settings.max_concurrent_workspaces:
+                raise AppError(
+                    "workspace_limit_reached",
+                    "Too many active workspaces. Try again shortly or delete one.",
+                    503,
+                )
+            self._pending += 1
+
+    def release(self) -> None:
+        """Return a reserved slot when workspace creation fails."""
+        with self._lock:
+            self._pending = max(0, self._pending - 1)
 
     def register(self, state: RepositoryState) -> None:
         with self._lock:
             state.last_accessed_at = utcnow()
             self._repos[state.id] = state
+            self._pending = max(0, self._pending - 1)
 
     def get(self, repository_id: str, session_id: str | None = None) -> RepositoryState | None:
         # The sweep takes its own short lock section, so a slow directory

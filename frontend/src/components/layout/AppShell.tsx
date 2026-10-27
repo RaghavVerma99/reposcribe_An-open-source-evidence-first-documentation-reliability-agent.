@@ -20,11 +20,18 @@ export default function AppShell() {
   const [navOpen, setNavOpen] = useState(false);
   const repository = useAsync(() => api.repository(repositoryId), [repositoryId]);
   const dialogRef = useRef<HTMLDivElement>(null);
+  const backgroundRef = useRef<HTMLDivElement>(null);
   const restoreFocusRef = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
     setNavOpen(false);
   }, [repositoryId]);
+
+  // While the drawer is open, the rest of the shell must be inert for both
+  // pointer and assistive-technology users, not only for the Tab order.
+  useEffect(() => {
+    backgroundRef.current?.toggleAttribute("inert", navOpen);
+  }, [navOpen]);
 
   useEffect(() => {
     if (!navOpen) return;
@@ -72,6 +79,8 @@ export default function AppShell() {
       window.cancelAnimationFrame(frame);
       document.body.style.overflow = previousOverflow;
       window.removeEventListener("keydown", onKey);
+      // The trigger lives inside the inert background, so clear that first.
+      backgroundRef.current?.removeAttribute("inert");
       if (restoreFocusRef.current?.isConnected) {
         restoreFocusRef.current.focus();
       }
@@ -107,20 +116,79 @@ export default function AppShell() {
 
   return (
     <div className="flex min-h-screen bg-canvas">
-      <a
-        href="#workspace-main"
-        className="sr-only z-50 focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:rounded-control focus:bg-ink focus:px-4 focus:py-2 focus:text-[13px] focus:font-semibold focus:text-canvas"
+      <div
+        ref={backgroundRef}
+        data-shell-background=""
+        className="contents"
+        aria-hidden={navOpen || undefined}
       >
-        Skip to content
-      </a>
+        <a
+          href="#workspace-main"
+          className="sr-only z-50 focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:rounded-control focus:bg-ink focus:px-4 focus:py-2 focus:text-[13px] focus:font-semibold focus:text-canvas"
+        >
+          Skip to content
+        </a>
 
-      <div className="hidden shrink-0 lg:block">
-        <div className="sticky top-0 h-screen">
-          <Sidebar
-            repositoryId={repositoryId}
+        <div className="hidden shrink-0 lg:block">
+          <div className="sticky top-0 h-screen">
+            <Sidebar
+              repositoryId={repositoryId}
+              repositoryName={data.name}
+              repositorySource={data.source}
+            />
+          </div>
+        </div>
+
+        <div className="flex min-w-0 flex-1 flex-col">
+          <TopBar
             repositoryName={data.name}
-            repositorySource={data.source}
+            providerMode={provider?.mode}
+            providerMessage={provider?.message}
+            onSearch={(query) =>
+              navigate(`/r/${repositoryId}/findings?q=${encodeURIComponent(query)}`)
+            }
+            left={
+              <button
+                id="nav-trigger"
+                type="button"
+                onClick={() => setNavOpen(true)}
+                aria-label="Open navigation"
+                aria-expanded={navOpen}
+                aria-controls="mobile-navigation"
+                className="grid h-9 w-9 place-items-center rounded-control border border-line bg-surface text-ink-muted transition-colors hover:border-line-strong hover:bg-surface-elevated hover:text-ink lg:hidden"
+              >
+                <svg
+                  viewBox="0 0 16 16"
+                  className="h-4 w-4"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.5"
+                  aria-hidden="true"
+                >
+                  <path d="M2.5 4.5h11M2.5 8h11M2.5 11.5h11" strokeLinecap="round" />
+                </svg>
+              </button>
+            }
           />
+          <main id="workspace-main" className="relative flex-1">
+            <div
+              aria-hidden="true"
+              className="pointer-events-none absolute inset-x-0 top-0 h-64 bg-[radial-gradient(58%_100%_at_50%_0%,rgba(34,197,94,0.045),transparent_72%)]"
+            />
+            <div className="relative mx-auto w-full max-w-[1320px]">
+              <Suspense
+                fallback={
+                  <div className="flex items-center gap-2 p-6 text-[13px] text-ink-muted sm:p-8">
+                    <Spinner className="text-accent-strong" /> Loading view…
+                  </div>
+                }
+              >
+                <div key={location.pathname} className="animate-fade-up">
+                  <Outlet context={{ repository: data, reloadRepository: repository.reload }} />
+                </div>
+              </Suspense>
+            </div>
+          </main>
         </div>
       </div>
 
@@ -149,57 +217,6 @@ export default function AppShell() {
           />
         </div>
       ) : null}
-
-      <div className="flex min-w-0 flex-1 flex-col">
-        <TopBar
-          repositoryName={data.name}
-          providerMode={provider?.mode}
-          providerMessage={provider?.message}
-          onSearch={(query) =>
-            navigate(`/r/${repositoryId}/findings?q=${encodeURIComponent(query)}`)
-          }
-          left={
-            <button
-              type="button"
-              onClick={() => setNavOpen(true)}
-              aria-label="Open navigation"
-              aria-expanded={navOpen}
-              aria-controls="mobile-navigation"
-              className="grid h-9 w-9 place-items-center rounded-control border border-line bg-surface text-ink-muted transition-colors hover:border-line-strong hover:bg-surface-elevated hover:text-ink lg:hidden"
-            >
-              <svg
-                viewBox="0 0 16 16"
-                className="h-4 w-4"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="1.5"
-                aria-hidden="true"
-              >
-                <path d="M2.5 4.5h11M2.5 8h11M2.5 11.5h11" strokeLinecap="round" />
-              </svg>
-            </button>
-          }
-        />
-        <main id="workspace-main" className="relative flex-1">
-          <div
-            aria-hidden="true"
-            className="pointer-events-none absolute inset-x-0 top-0 h-64 bg-[radial-gradient(58%_100%_at_50%_0%,rgba(34,197,94,0.045),transparent_72%)]"
-          />
-          <div className="relative mx-auto w-full max-w-[1320px]">
-            <Suspense
-              fallback={
-                <div className="flex items-center gap-2 p-6 text-[13px] text-ink-muted sm:p-8">
-                  <Spinner className="text-accent-strong" /> Loading view…
-                </div>
-              }
-            >
-              <div key={location.pathname} className="animate-fade-up">
-                <Outlet context={{ repository: data, reloadRepository: repository.reload }} />
-              </div>
-            </Suspense>
-          </div>
-        </main>
-      </div>
     </div>
   );
 }

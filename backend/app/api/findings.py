@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Annotated, Literal
 
-from fastapi import APIRouter, Depends, Query, Request
+from fastapi import APIRouter, Depends, Header, Query, Request, Response
 
 from app.api.deps import repo_or_404
 from app.analyzers.registry import CHECKS_SUPPORTED
@@ -60,10 +60,22 @@ def list_findings(
     return FindingPage(items=page, total=total, next_cursor=next_cursor)
 
 
+def _etag(finding: Finding) -> str:
+    """A representation tag that changes whenever the status changes."""
+    return f'"{finding.id}.{finding.revision}"'
+
+
 @router.get("/{finding_id}", response_model=Finding)
-def get_finding(request: Request, repository_id: str, finding_id: str) -> Finding:
+def get_finding(
+    request: Request,
+    repository_id: str,
+    finding_id: str,
+    response: Response,
+) -> Finding:
     state = repo_or_404(request, repository_id)
-    return SERVICE.get_finding(state, finding_id)
+    finding = SERVICE.get_finding(state, finding_id)
+    response.headers["ETag"] = _etag(finding)
+    return finding
 
 
 @router.patch("/{finding_id}", response_model=Finding)
@@ -72,6 +84,19 @@ def update_finding(
     repository_id: str,
     finding_id: str,
     payload: FindingStatusUpdate,
+    response: Response,
+    if_match: Annotated[str | None, Header(alias="If-Match")] = None,
 ) -> Finding:
     state = repo_or_404(request, repository_id)
-    return SERVICE.set_status(state, finding_id, payload.status)
+    current = SERVICE.get_finding(state, finding_id)
+    # If-Match is optional for compatibility, but a supplied value must match
+    # the revision the client last saw.
+    if if_match is not None and if_match.strip() not in ("*", _etag(current)):
+        raise AppError(
+            "precondition_failed",
+            "The finding changed since you loaded it. Reload and try again.",
+            412,
+        )
+    updated = SERVICE.set_status(state, finding_id, payload.status)
+    response.headers["ETag"] = _etag(updated)
+    return updated

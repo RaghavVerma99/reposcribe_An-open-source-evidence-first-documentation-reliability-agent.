@@ -128,9 +128,15 @@ export const api = {
   finding: (repositoryId: string, findingId: string) =>
     request<Finding>(`/repositories/${repositoryId}/findings/${findingId}`),
 
-  updateFinding: (repositoryId: string, findingId: string, status: FindingStatus) =>
+  updateFinding: (
+    repositoryId: string,
+    findingId: string,
+    status: FindingStatus,
+    revision: number,
+  ) =>
     request<Finding>(`/repositories/${repositoryId}/findings/${findingId}`, {
       method: "PATCH",
+      headers: { "If-Match": `"${findingId}.${revision}"` },
       body: JSON.stringify({ status }),
     }),
 

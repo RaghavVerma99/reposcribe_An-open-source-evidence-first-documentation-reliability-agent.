@@ -763,7 +763,7 @@ export default function LandingPage() {
               { value: 6, suffix: "", label: "deterministic checks" },
               { value: 0, suffix: "", label: "files modified" },
               { value: 0, suffix: "", label: "uncited conclusions" },
-              { value: 133, suffix: "", label: "backend tests" },
+              { value: 136, suffix: "", label: "backend tests" },
             ].map((stat, index) => (
               <Reveal key={stat.label} delay={index * 60}>
                 <div>

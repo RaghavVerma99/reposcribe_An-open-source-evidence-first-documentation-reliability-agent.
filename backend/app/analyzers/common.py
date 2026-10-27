@@ -124,7 +124,6 @@ class Route:
     file: str
     start_line: int
     end_line: int
-    prefix_resolved: bool = True
     prefix_line: int | None = None
     # The router variable the decorator was attached to and the path exactly as
     # written in the decorator. Both are kept so a prefix applied by another
@@ -619,7 +618,6 @@ def parse_python(path: str, text: str) -> PyFile:
                             file=path,
                             start_line=start_line,
                             end_line=getattr(node, "end_lineno", node.lineno) or node.lineno,
-                            prefix_resolved=True,
                             prefix_line=prefix_line,
                             router=base,
                             declared_path=route_path,

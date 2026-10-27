@@ -153,6 +153,54 @@ def test_reopen_restores_the_status_held_before_dismissal(client) -> None:
     assert reopened["status_before_dismissal"] is None
 
 
+def test_patch_enforces_the_current_etag(client) -> None:
+    repository_id = _create_sample(client)
+    audit = client.post(f"/api/v1/repositories/{repository_id}/audits").json()
+    finding = audit["findings"][0]
+
+    detail = client.get(f"/api/v1/repositories/{repository_id}/findings/{finding['id']}")
+    assert detail.status_code == 200
+    etag = detail.headers["etag"]
+    assert etag == f'"{finding["id"]}.{finding["revision"]}"'
+
+    stale = client.patch(
+        f"/api/v1/repositories/{repository_id}/findings/{finding['id']}",
+        json={"status": "dismissed"},
+        headers={"If-Match": f'"{finding["id"]}.{finding["revision"] + 1}"'},
+    )
+    assert stale.status_code == 412
+    assert stale.json()["error"]["code"] == "precondition_failed"
+
+    updated = client.patch(
+        f"/api/v1/repositories/{repository_id}/findings/{finding['id']}",
+        json={"status": "dismissed"},
+        headers={"If-Match": etag},
+    )
+    assert updated.status_code == 200
+    assert updated.json()["revision"] == finding["revision"] + 1
+    assert updated.headers["etag"] != etag
+
+
+def test_active_findings_exclude_resolved_and_dismissed(client) -> None:
+    repository_id = _create_sample(client)
+    audit = client.post(f"/api/v1/repositories/{repository_id}/audits").json()
+    total = len(audit["findings"])
+    assert audit["summary"]["findings_active_total"] == total
+
+    finding_id = audit["findings"][0]["id"]
+    client.patch(
+        f"/api/v1/repositories/{repository_id}/findings/{finding_id}",
+        json={"status": "dismissed"},
+    )
+
+    overview = client.get(f"/api/v1/repositories/{repository_id}/overview").json()
+    assert overview["findings_active_total"] == total - 1
+
+    repository = client.get(f"/api/v1/repositories/{repository_id}").json()
+    assert repository["findings_total"] == total
+    assert repository["findings_active_total"] == total - 1
+
+
 def test_finding_status_payload_is_validated(client) -> None:
     repository_id = _create_sample(client)
     audit = client.post(f"/api/v1/repositories/{repository_id}/audits").json()

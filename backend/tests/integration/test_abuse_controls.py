@@ -244,3 +244,21 @@ def test_signature_verification_rejects_garbage() -> None:
     assert read_session_cookie("no-dot-here") is None
     assert read_session_cookie(".onlysignature") is None
     assert read_session_cookie("session.") is None
+
+def test_workspace_cap_rejects_excess_workspaces(tmp_path, monkeypatch) -> None:
+    """T-22: never create more workspaces than the configured ceiling."""
+    monkeypatch.setenv("WORKSPACE_ROOT", str(tmp_path / "workspaces"))
+    monkeypatch.setenv("MAX_CONCURRENT_WORKSPACES", "1")
+    from app.core import settings as settings_module
+
+    settings_module.get_settings.cache_clear()
+    app = create_app()
+    try:
+        with TestClient(app) as client:
+            first = client.post("/api/v1/repositories", data={"sample_id": "fastapi-users"})
+            assert first.status_code == 201, first.text
+            second = client.post("/api/v1/repositories", data={"sample_id": "fastapi-users"})
+            assert second.status_code == 503
+            assert second.json()["error"]["code"] == "workspace_limit_reached"
+    finally:
+        settings_module.get_settings.cache_clear()

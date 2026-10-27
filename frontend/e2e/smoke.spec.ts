@@ -9,6 +9,10 @@ import { expect, test } from "./fixtures";
  *
  *  1-3   landing title, self-hosted fonts, heading font
  *  40-42 landing narrative: desktop, mobile, and reduced-motion layout
+ *  43    an unavailable provider is not labelled as demo mode
+ *  44-46 drawer makes the shell inert and releases it
+ *  47-49 360 px finding detail, patch, and settings
+ *  50    global search reflects the active ?q=
  *  4-21  six workspace routes: title, no horizontal overflow, headings present
  *  22-24 overview labels (indexed files, limitations, no stale wording)
  *  25    findings URL state (?status= and ?q=)
@@ -186,6 +190,9 @@ test("findings page adopts URL search and status filters", async ({ page, fixtur
   expect.soft(urlState.status, "findings URL status").toBe("verified");
   expect.soft(urlState.search, "findings URL search string").toContain("status=verified");
   expect.soft(urlState.search, "findings URL search string").toContain("q=README");
+
+  // 50: the global search box reflects the active query, not an empty field.
+  await expect(page.locator('input[type="search"]').first()).toHaveValue("README");
 });
 
 test("Ask renders a grounded local-demo answer", async ({ page, fixtures }) => {
@@ -211,6 +218,32 @@ test("Ask renders a grounded local-demo answer", async ({ page, fixtures }) => {
   // 28: provider copy identifies the local demo mode.
   const text = await page.locator("body").innerText();
   expect.soft(text, "ask provider copy is mode-aware").toContain("Local demo mode");
+});
+
+test("an unavailable provider is never labelled as demo mode", async ({ page, fixtures }) => {
+  await page.route("**/api/v1/provider", (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        mode: "unavailable",
+        provider: "alan",
+        model: "",
+        state: "error",
+        message: "Provider unavailable. Drafts are deterministic only.",
+        verified_contract: false,
+      }),
+    }),
+  );
+
+  await page.goto(`/r/${fixtures.repository.id}/findings/${fixtures.finding.id}`);
+  await expect(page.getByRole("heading", { name: "Reviewer actions" })).toBeVisible();
+
+  // 43: the unavailable state is reported as unavailable, not as a working demo.
+  await expect(
+    page.getByText("Provider unavailable. Drafts are deterministic only.").first(),
+  ).toBeVisible();
+  await expect(page.getByText("Demo mode drafts")).toHaveCount(0);
 });
 
 test("finding can be dismissed and reopened", async ({ page, fixtures }) => {
@@ -246,7 +279,9 @@ test("mobile drawer opens with focus, traps Tab, and restores focus", async ({
   await page.setViewportSize({ width: 360, height: 800 });
   await page.goto(`/r/${fixtures.repository.id}`);
 
-  const openButton = page.getByRole("button", { name: "Open navigation" });
+  // CSS locator: once the drawer opens the trigger sits in an inert, aria-hidden
+  // subtree, so a role query would correctly stop finding it.
+  const openButton = page.locator("#nav-trigger");
   const dialog = page.getByRole("dialog", { name: "Navigation" });
 
   await expect(openButton).toBeVisible();
@@ -275,6 +310,17 @@ test("mobile drawer opens with focus, traps Tab, and restores focus", async ({
   expect.soft(openState.bodyOverflow, "drawer locks body scroll").toBe("hidden");
   expect.soft(openState.activeInside, "drawer moves focus inside").toBe(true);
 
+  // 44-45: the rest of the shell is inert and hidden from assistive technology.
+  const backgroundState = await page.evaluate(() => {
+    const background = document.querySelector("[data-shell-background]");
+    return {
+      inert: background?.hasAttribute("inert") ?? false,
+      ariaHidden: background?.getAttribute("aria-hidden") ?? null,
+    };
+  });
+  expect.soft(backgroundState.inert, "drawer makes the background inert").toBe(true);
+  expect.soft(backgroundState.ariaHidden, "drawer hides the background from AT").toBe("true");
+
   // 32: Tab stays within the dialog.
   for (let index = 0; index < 12; index += 1) {
     await page.keyboard.press("Tab");
@@ -295,6 +341,12 @@ test("mobile drawer opens with focus, traps Tab, and restores focus", async ({
   await expect(openButton).toBeFocused();
   const bodyOverflow = await page.evaluate(() => document.body.style.overflow);
   expect.soft(bodyOverflow, "drawer releases body scroll").not.toBe("hidden");
+
+  // 46: closing removes inert from the background.
+  const released = await page.evaluate(
+    () => !document.querySelector("[data-shell-background]")?.hasAttribute("inert"),
+  );
+  expect.soft(released, "drawer releases the inert background").toBe(true);
 });
 
 test("360 px routes do not overflow horizontally", async ({ page, fixtures }) => {
@@ -303,13 +355,16 @@ test("360 px routes do not overflow horizontally", async ({ page, fixtures }) =>
   const routes = [
     { path: `/r/${fixtures.repository.id}`, label: "mobile overview" },
     { path: `/r/${fixtures.repository.id}/findings`, label: "mobile findings" },
+    { path: `/r/${fixtures.repository.id}/findings/${fixtures.finding.id}`, label: "mobile finding detail" },
+    { path: `/r/${fixtures.repository.id}/patches/${fixtures.patch.id}`, label: "mobile patch" },
     { path: `/r/${fixtures.repository.id}/ask`, label: "mobile ask" },
+    { path: `/r/${fixtures.repository.id}/settings`, label: "mobile settings" },
   ];
 
   for (const route of routes) {
     await page.goto(route.path);
     await expect(page.locator("h1").first()).toBeVisible();
-    // 34-36: no horizontal overflow at the 360 px viewport.
+    // 34-36 and 47-49: no horizontal overflow at the 360 px viewport.
     await expectNoHorizontalOverflow(page, route.label);
   }
 });

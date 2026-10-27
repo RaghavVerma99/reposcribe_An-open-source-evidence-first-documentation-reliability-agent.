@@ -26,6 +26,7 @@ export interface Finding {
   summary: string;
   status: FindingStatus;
   status_before_dismissal: FindingStatus | null;
+  revision: number;
   severity: Severity;
   confidence_note: string;
   documentation_claim: string | null;
@@ -45,6 +46,7 @@ export interface Repository {
   files_indexed: number;
   docs_found: number;
   findings_total: number;
+  findings_active_total: number;
   last_audit_at: string | null;
 }
 
@@ -55,7 +57,6 @@ export interface RouteInfo {
   file: string;
   start_line: number;
   end_line: number;
-  prefix_resolved: boolean;
 }
 
 export interface RepositoryOverview {
@@ -70,6 +71,7 @@ export interface RepositoryOverview {
   routes: RouteInfo[];
   checks_supported: string[];
   findings_by_status: Record<string, number>;
+  findings_active_total: number;
   last_audit_at: string | null;
   indexed_at: string | null;
   limitations: string[];
@@ -79,6 +81,7 @@ export interface RepositoryOverview {
 export interface AuditSummary {
   files_inspected: number;
   findings_total: number;
+  findings_active_total: number;
   verified: number;
   needs_review: number;
   insufficient_evidence: number;

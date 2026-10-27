@@ -40,6 +40,9 @@ class Settings:
     audit_timeout_seconds: int = 60
     workspace_root: Path = Path("./.reposcribe-workspaces")
     workspace_ttl_minutes: int = 120
+    # One workspace per repository; refuse new ones past this ceiling instead
+    # of exhausting disk and memory.
+    max_concurrent_workspaces: int = 8
 
     # Signs the anonymous session cookie. When empty, a random secret is
     # generated per process: safe for one worker, but every worker must share
@@ -87,6 +90,7 @@ def get_settings() -> Settings:
         audit_timeout_seconds=_int("AUDIT_TIMEOUT_SECONDS", 60),
         workspace_root=Path(_env("WORKSPACE_ROOT", "./.reposcribe-workspaces")),
         workspace_ttl_minutes=_int("WORKSPACE_TTL_MINUTES", 120),
+        max_concurrent_workspaces=_int("MAX_CONCURRENT_WORKSPACES", 8),
         session_secret=_env("SESSION_SECRET"),
         alan_api_key=_env("ALAN_API_KEY"),
         alan_workflow_id=_env("ALAN_WORKFLOW_ID"),

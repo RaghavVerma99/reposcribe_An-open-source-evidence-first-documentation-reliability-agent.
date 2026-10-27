@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { Link, useLocation, useParams } from "react-router-dom";
 
 import { cn } from "../../lib/format";
@@ -36,6 +36,13 @@ export default function TopBar({
   const location = useLocation();
   const { repositoryId = "" } = useParams();
   const section = sectionLabel(location.pathname);
+  const [searchValue, setSearchValue] = useState("");
+
+  // Reflect the active findings query, including when the URL changes from a
+  // link or the back button rather than from this input.
+  useEffect(() => {
+    setSearchValue(new URLSearchParams(location.search).get("q") ?? "");
+  }, [location.search]);
 
   return (
     <div
@@ -63,7 +70,12 @@ export default function TopBar({
         </div>
 
         <div className="flex min-w-0 flex-1 items-center justify-center px-1 sm:px-2">
-          <GlobalSearch className="max-w-[420px]" onSubmit={onSearch} />
+          <GlobalSearch
+            className="max-w-[420px]"
+            value={searchValue}
+            onChange={setSearchValue}
+            onSubmit={onSearch}
+          />
         </div>
 
         <div className="flex shrink-0 items-center gap-2">

@@ -40,6 +40,10 @@ class Finding(BaseModel):
         description="Status the finding held before a reviewer dismissed it. "
         "Reopening restores this value instead of guessing a new status.",
     )
+    revision: int = Field(
+        default=0,
+        description="Increments on every status change. Used as the ETag for If-Match.",
+    )
     severity: Severity
     confidence_note: str
     documentation_claim: str | None = None
@@ -66,6 +70,7 @@ class Repository(BaseModel):
     files_indexed: int = 0
     docs_found: int = 0
     findings_total: int = 0
+    findings_active_total: int = 0
     last_audit_at: datetime | None = None
 
 
@@ -76,7 +81,6 @@ class RouteInfo(BaseModel):
     file: str
     start_line: int
     end_line: int
-    prefix_resolved: bool = True
 
 
 class RepositoryOverview(BaseModel):
@@ -91,6 +95,8 @@ class RepositoryOverview(BaseModel):
     routes: list[RouteInfo]
     checks_supported: list[str]
     findings_by_status: dict[str, int]
+    # Findings that still need attention: everything except resolved/dismissed.
+    findings_active_total: int = 0
     last_audit_at: datetime | None = None
     indexed_at: datetime | None = None
     limitations: list[str] = Field(default_factory=list)
@@ -103,6 +109,7 @@ class RepositoryOverview(BaseModel):
 class AuditSummary(BaseModel):
     files_inspected: int
     findings_total: int
+    findings_active_total: int = 0
     verified: int = 0
     needs_review: int = 0
     insufficient_evidence: int = 0

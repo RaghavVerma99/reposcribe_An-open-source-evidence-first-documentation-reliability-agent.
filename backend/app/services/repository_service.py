@@ -49,38 +49,46 @@ class RepositoryService:
         return self._create(session_id, source.name, "sample", source)
 
     def create_from_upload(self, session_id: str, filename: str, data: bytes) -> RepositoryState:
+        self.store.reserve()
         repository_id = f"repo_{uuid.uuid4().hex[:12]}"
         workspace, repo_dir, patch_dir = new_workspace(self.settings, repository_id)
         try:
             project_root, _ = safe_extract_zip(data, repo_dir, self.settings)
-        except AppError:
+            state = self._finalize(
+                repository_id=repository_id,
+                name=_safe_name(filename),
+                source="upload",
+                session_id=session_id,
+                workspace=workspace,
+                root=project_root,
+                patch_dir=patch_dir,
+            )
+        except Exception:
             shutil.rmtree(workspace, ignore_errors=True)
+            self.store.release()
             raise
-        state = self._finalize(
-            repository_id=repository_id,
-            name=_safe_name(filename),
-            source="upload",
-            session_id=session_id,
-            workspace=workspace,
-            root=project_root,
-            patch_dir=patch_dir,
-        )
         self.store.register(state)
         return state
 
     def _create(self, session_id: str, name: str, source: str, origin: Path) -> RepositoryState:
+        self.store.reserve()
         repository_id = f"repo_{uuid.uuid4().hex[:12]}"
         workspace, repo_dir, patch_dir = new_workspace(self.settings, repository_id)
-        shutil.copytree(origin, repo_dir, dirs_exist_ok=True)
-        state = self._finalize(
-            repository_id=repository_id,
-            name=name,
-            source=source,
-            session_id=session_id,
-            workspace=workspace,
-            root=repo_dir,
-            patch_dir=patch_dir,
-        )
+        try:
+            shutil.copytree(origin, repo_dir, dirs_exist_ok=True)
+            state = self._finalize(
+                repository_id=repository_id,
+                name=name,
+                source=source,
+                session_id=session_id,
+                workspace=workspace,
+                root=repo_dir,
+                patch_dir=patch_dir,
+            )
+        except Exception:
+            shutil.rmtree(workspace, ignore_errors=True)
+            self.store.release()
+            raise
         self.store.register(state)
         return state
 
@@ -149,6 +157,9 @@ class RepositoryService:
             files_indexed=len(state.manifest),
             docs_found=len(state.index.docs) if state.index else 0,
             findings_total=len(findings),
+            findings_active_total=sum(
+                1 for finding in findings if finding.status not in ("resolved", "dismissed")
+            ),
             last_audit_at=_last_audit(state),
         )
 
@@ -185,12 +196,16 @@ class RepositoryService:
                     file=route.file,
                     start_line=route.start_line,
                     end_line=route.end_line,
-                    prefix_resolved=route.prefix_resolved,
                 )
                 for route in index.routes
             ],
             checks_supported=list(CHECKS_SUPPORTED),
             findings_by_status=by_status,
+            findings_active_total=sum(
+                count
+                for status, count in by_status.items()
+                if status not in ("resolved", "dismissed")
+            ),
             last_audit_at=_last_audit(state),
             indexed_at=state.indexed_at,
             limitations=combined_limitations,
