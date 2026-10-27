@@ -165,7 +165,8 @@ Never put a secret in a `VITE_` variable: Vite inlines those into the browser bu
 Be explicit about these in any public demo:
 
 - Durable state requires a persistent disk. The free Render plan is ephemeral.
-- Workspaces are disposable and expire after two hours of inactivity.
+- Repositories expire after `WORKSPACE_TTL_MINUTES` (default 120) of inactivity; expiry removes the
+  workspace and its history. Archive-on-expiry is not implemented.
 - The provider runs in `local_demo`; no live model is connected.
 - No benchmark has measured precision or recall yet.
 - SQLite is the only store; there are no accounts, and no multi-tenant isolation beyond the signed

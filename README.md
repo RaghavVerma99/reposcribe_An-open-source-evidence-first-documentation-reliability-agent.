@@ -212,6 +212,8 @@ HTML shell is `no-cache` so a deploy never leaves a stale document pointing at r
   human.
 - State is only as durable as the filesystem: a restart restores history when `REPOSCRIBE_DB_PATH` is on
   a persistent volume. Without the workspace, history stays readable but re-auditing returns `410`.
+- Repositories expire after `WORKSPACE_TTL_MINUTES` (default 120) of inactivity. Expiry removes the
+  workspace and its history; archive-on-expiry is not implemented yet.
 - No benchmark has been run, so no precision, recall, or timing figures are published. The procedure is
   defined in [`docs/evaluation.md`](docs/evaluation.md).
 - The provider runs in `local_demo`; no live model is connected.
