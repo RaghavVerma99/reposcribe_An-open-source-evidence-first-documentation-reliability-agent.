@@ -329,28 +329,40 @@ def _set_session_secret_from(settings) -> None:
 def _make_lifespan(settings):
     """Startup and shutdown for one worker.
 
-    On startup, every workspace directory found on disk is unreachable (the
-    session that owned it lived in memory), so it is removed instead of
-    leaking forever after a crash or a restart. A janitor task then keeps
-    expired workspaces from accumulating while the process runs, and it is
-    cancelled when the server shuts down.
+    Repositories are restored from SQLite before the server accepts traffic.
+    A workspace that survived the restart keeps its repository; a workspace
+    that did not is marked unavailable, but its findings and audit history
+    remain readable. A janitor task then expires idle workspaces while the
+    process runs and is cancelled on shutdown.
     """
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
-        removed = sweep_orphan_workspaces(settings)
+        removed = sweep_orphan_workspaces(settings, keep=app.state.store.ids())
         if removed:
             _logger.warning(
-                "Removed %d unreachable workspace directory(ies) left by a previous process.",
+                "Removed %d workspace directory(ies) with no persisted owner.",
                 len(removed),
             )
+
+        for state in app.state.store.all():
+            if state.root.is_dir():
+                continue
+            note = (
+                "The workspace was not restored after a restart; upload the "
+                "repository again to re-audit it."
+            )
+            if note not in state.scan_limitations:
+                state.status = "failed"
+                state.scan_limitations.append(note)
+                app.state.store.persist(state)
 
         async def janitor():
             while True:
                 await asyncio.sleep(JANITOR_INTERVAL_SECONDS)
                 try:
                     app.state.store.sweep_expired()
-                    sweep_orphan_workspaces(settings)
+                    sweep_orphan_workspaces(settings, keep=app.state.store.ids())
                 except Exception:  # pragma: no cover - a janitor failure must never kill the app
                     _logger.warning("Workspace sweep failed.", exc_info=True)
 

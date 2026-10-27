@@ -79,6 +79,7 @@ def reindex_repository(
     state = repo_or_404(request, repository_id)
     service = _service(settings, store)
     service.reindex(state)
+    store.persist(state)
     return service.to_model(state)
 
 
@@ -99,14 +100,15 @@ def search_repository(
     repository_id: str,
     q: str = "",
     limit: int = 8,
+    settings: Settings = Depends(get_app_settings),
+    store: Store = Depends(get_store),
 ) -> SearchResponse:
     state = repo_or_404(request, repository_id)
-    if state.index is None:
-        raise AppError("internal_error", "Repository has not been indexed.", 500)
+    index = _service(settings, store).ensure_index(state)
     if not q.strip():
         return SearchResponse(hits=[])
     bounded = max(1, min(limit, 20))
-    chunks = retrieve(state.index, q, limit=bounded)
+    chunks = retrieve(index, q, limit=bounded)
     return SearchResponse(
         hits=[
             SearchHit(

@@ -98,5 +98,6 @@ def update_finding(
             412,
         )
     updated = SERVICE.set_status(state, finding_id, payload.status)
+    request.app.state.store.persist(state)
     response.headers["ETag"] = _etag(updated)
     return updated

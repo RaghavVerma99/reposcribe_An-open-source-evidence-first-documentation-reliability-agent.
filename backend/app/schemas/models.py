@@ -117,6 +117,15 @@ class AuditSummary(BaseModel):
     dismissed: int = 0
 
 
+class AuditDelta(BaseModel):
+    previous_audit_id: str | None = None
+    added: int = 0
+    fixed: int = 0
+    unchanged: int = 0
+    added_findings: list[Finding] = Field(default_factory=list)
+    fixed_findings: list[Finding] = Field(default_factory=list)
+
+
 class AuditRun(BaseModel):
     id: str
     repository_id: str
@@ -125,6 +134,18 @@ class AuditRun(BaseModel):
     checks_skipped: list[str]
     summary: AuditSummary
     findings: list[Finding]
+    delta: AuditDelta | None = Field(
+        default=None,
+        description="Change against the previous audit, based on active findings.",
+    )
+    created_at: datetime
+
+
+class AuditHistoryItem(BaseModel):
+    id: str
+    status: Literal["completed", "partial", "failed"]
+    summary: AuditSummary
+    delta: AuditDelta | None = None
     created_at: datetime
 
 

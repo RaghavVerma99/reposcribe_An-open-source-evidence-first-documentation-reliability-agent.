@@ -8,9 +8,22 @@ import pytest
 from fastapi.testclient import TestClient
 
 
+@pytest.fixture(autouse=True)
+def _isolated_state(tmp_path, monkeypatch):
+    """Give every test its own SQLite file and workspace directory."""
+    monkeypatch.setenv("WORKSPACE_ROOT", str(tmp_path / "workspaces"))
+    monkeypatch.setenv("REPOSCRIBE_DB_PATH", str(tmp_path / "state.db"))
+    from app.core import settings as settings_module
+
+    settings_module.get_settings.cache_clear()
+    yield
+    settings_module.get_settings.cache_clear()
+
+
 @pytest.fixture()
 def settings(tmp_path, monkeypatch):
     monkeypatch.setenv("WORKSPACE_ROOT", str(tmp_path / "workspaces"))
+    monkeypatch.setenv("REPOSCRIBE_DB_PATH", str(tmp_path / "state.db"))
     monkeypatch.setenv("MODEL_PROVIDER", "local_demo")
     from app.core import settings as settings_module
 

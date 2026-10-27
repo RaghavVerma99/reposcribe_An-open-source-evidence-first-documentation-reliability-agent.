@@ -8,6 +8,10 @@ services:
     dockerfilePath: ./Dockerfile
     healthCheckPath: /api/v1/health
     autoDeploy: true
+    # Free instances have an ephemeral disk. For durable state, use a paid
+    # instance with a disk mounted at /var/data and set:
+    #   REPOSCRIBE_DB_PATH=/var/data/reposcribe.db
+    #   WORKSPACE_ROOT=/var/data/workspaces
     envVars:
       - key: APP_ENV
         value: production
@@ -15,6 +19,8 @@ services:
         value: local_demo
       - key: WORKSPACE_ROOT
         value: /tmp/reposcribe-workspaces
+      - key: REPOSCRIBE_DB_PATH
+        value: /tmp/reposcribe/state.db
       - key: SESSION_SECRET
         generateValue: true
       - key: REPOSCRIBE_LOG_LEVEL

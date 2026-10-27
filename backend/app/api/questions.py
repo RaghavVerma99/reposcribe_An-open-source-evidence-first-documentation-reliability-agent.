@@ -8,6 +8,7 @@ from app.api.deps import get_app_settings, repo_or_404
 from app.core.settings import Settings
 from app.schemas.models import GroundedAnswer, QuestionRequest
 from app.services.question_service import QuestionService
+from app.services.repository_service import RepositoryService
 
 router = APIRouter(prefix="/repositories/{repository_id}/questions", tags=["questions"])
 
@@ -20,4 +21,5 @@ def ask_question(
     settings: Settings = Depends(get_app_settings),
 ) -> GroundedAnswer:
     state = repo_or_404(request, repository_id)
+    RepositoryService(settings, request.app.state.store).ensure_index(state)
     return QuestionService(settings).ask(state, payload.question)

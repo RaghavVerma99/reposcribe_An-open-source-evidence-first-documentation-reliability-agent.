@@ -65,6 +65,26 @@ def test_audit_reports_checks_and_summary(client) -> None:
     assert audit["summary"]["verified"] >= 5
 
 
+def test_audit_history_returns_runs_and_delta(client) -> None:
+    repository_id = _create_sample(client)
+    first = client.post(f"/api/v1/repositories/{repository_id}/audits").json()
+    assert first["delta"] is None
+
+    history = client.get(f"/api/v1/repositories/{repository_id}/audits").json()
+    assert len(history) == 1
+    assert history[0]["id"] == first["id"]
+    assert history[0]["delta"] is None
+    assert history[0]["summary"]["findings_total"] == len(first["findings"])
+
+    second = client.post(f"/api/v1/repositories/{repository_id}/audits").json()
+    assert second["delta"]["previous_audit_id"] == first["id"]
+    assert second["delta"]["added"] == 0
+    assert second["delta"]["fixed"] == 0
+
+    history = client.get(f"/api/v1/repositories/{repository_id}/audits").json()
+    assert [item["id"] for item in history] == [second["id"], first["id"]]
+
+
 def test_audit_rejects_unknown_check_ids(client) -> None:
     repository_id = _create_sample(client)
     response = client.post(

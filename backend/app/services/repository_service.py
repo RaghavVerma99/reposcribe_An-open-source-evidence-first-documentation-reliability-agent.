@@ -129,6 +129,25 @@ class RepositoryService:
             state.status = "failed"
             raise AppError("internal_error", f"Indexing failed: {exc}", 500) from exc
 
+    def ensure_index(self, state: RepositoryState) -> RepoIndex:
+        """Rebuild the in-memory index after a restart, or explain why not.
+
+        The index is not persisted; the workspace is. A restored repository
+        rebuilds lazily on the first request that needs it, so startup stays
+        fast and a missing workspace becomes a clear 410 rather than a 500.
+        """
+        if state.index is not None:
+            return state.index
+        if not state.root.is_dir():
+            raise AppError(
+                "repository_expired",
+                "The repository workspace is no longer available. Upload it again to audit it.",
+                410,
+            )
+        index = self.reindex(state)
+        self.store.persist(state)
+        return index
+
     def _manifest(self, root: Path) -> list[ManifestEntry]:
         entries: list[ManifestEntry] = []
         for rel, absolute, size in iter_files(root):
@@ -155,7 +174,7 @@ class RepositoryService:
             status=state.status,
             created_at=state.created_at,
             files_indexed=len(state.manifest),
-            docs_found=len(state.index.docs) if state.index else 0,
+            docs_found=sum(1 for entry in state.manifest if entry.is_doc),
             findings_total=len(findings),
             findings_active_total=sum(
                 1 for finding in findings if finding.status not in ("resolved", "dismissed")
@@ -164,9 +183,7 @@ class RepositoryService:
         )
 
     def overview(self, state: RepositoryState) -> RepositoryOverview:
-        index = state.index
-        if index is None:
-            raise AppError("internal_error", "Repository has not been indexed.", 500)
+        index = self.ensure_index(state)
         languages: dict[str, int] = {}
         for entry in state.manifest:
             languages[entry.language] = languages.get(entry.language, 0) + 1

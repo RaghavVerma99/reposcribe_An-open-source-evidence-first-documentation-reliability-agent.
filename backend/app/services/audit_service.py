@@ -10,7 +10,7 @@ from app.analyzers.factory import AnalyzerResult, deadline_expired, make_finding
 from app.analyzers.registry import CHECKS_SUPPORTED, get_analyzer
 from app.core.errors import AppError
 from app.core.settings import Settings, get_settings
-from app.schemas.models import AuditRun, AuditSummary, Finding
+from app.schemas.models import AuditDelta, AuditRun, AuditSummary, Finding
 from app.services.store import RepositoryState, utcnow
 
 CHECK_LABELS = {
@@ -49,6 +49,7 @@ class AuditService:
             raise AppError("invalid_request", f"Unsupported check id(s): {', '.join(unknown)}.")
 
         previous = dict(state.findings)
+        previous_audit = max(state.audits.values(), key=lambda run: run.created_at, default=None)
         findings: dict[str, Finding] = {}
         checks_run: list[str] = []
         checks_skipped: list[str] = []
@@ -83,7 +84,6 @@ class AuditService:
                 )
             else:
                 checks_run.append(check_id)
-            limitations.extend(result.limitations)
             limitations.extend(result.limitations)
             for path, reason in result.skipped:
                 limitations.append(f"{path} skipped: {reason}")
@@ -126,6 +126,7 @@ class AuditService:
             checks_skipped=checks_skipped,
             summary=summary,
             findings=sorted(findings.values(), key=_sort_key),
+            delta=_compute_delta(previous_audit, findings),
             created_at=utcnow(),
         )
         state.audits[run.id] = run
@@ -176,6 +177,36 @@ class AuditService:
 def _sort_key(finding: Finding):
     severity_order = {"high": 0, "medium": 1, "low": 2, "info": 3}
     return (severity_order.get(finding.severity, 9), finding.check_id, finding.id)
+
+
+def _finding_key(finding: Finding) -> tuple[str, str]:
+    return (finding.check_id, finding.subject_key)
+
+
+def _compute_delta(previous: AuditRun | None, findings: dict[str, Finding]) -> AuditDelta | None:
+    """Active-finding delta against the previous audit in the same repository."""
+    if previous is None:
+        return None
+    previous_active = {
+        _finding_key(finding): finding
+        for finding in previous.findings
+        if finding.status not in ("resolved", "dismissed")
+    }
+    current_active = {
+        _finding_key(finding): finding
+        for finding in findings.values()
+        if finding.status not in ("resolved", "dismissed")
+    }
+    added = [current_active[key] for key in current_active if key not in previous_active]
+    fixed = [previous_active[key] for key in previous_active if key not in current_active]
+    return AuditDelta(
+        previous_audit_id=previous.id,
+        added=len(added),
+        fixed=len(fixed),
+        unchanged=len(set(previous_active) & set(current_active)),
+        added_findings=sorted(added, key=_sort_key)[:20],
+        fixed_findings=sorted(fixed, key=_sort_key)[:20],
+    )
 
 
 def _active_total(findings: Iterable[Finding]) -> int:

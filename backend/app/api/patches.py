@@ -11,6 +11,7 @@ from app.core.settings import Settings
 from app.schemas.models import PatchDetail, PatchDraft, ValidationResult
 from app.services.export_service import export_markdown, export_patch
 from app.services.patch_service import PatchService
+from app.services.repository_service import RepositoryService
 
 router = APIRouter(tags=["patches"])
 
@@ -27,7 +28,11 @@ def create_patch(
     settings: Settings = Depends(get_app_settings),
 ) -> PatchDraft:
     state = repo_or_404(request, repository_id)
-    return PatchService(settings).create(state, finding_id)
+    store = request.app.state.store
+    RepositoryService(settings, store).ensure_index(state)
+    patch = PatchService(settings).create(state, finding_id)
+    store.persist(state)
+    return patch
 
 
 @router.get("/repositories/{repository_id}/patches/{patch_id}", response_model=PatchDetail)
@@ -54,7 +59,11 @@ def validate_patch(
     settings: Settings = Depends(get_app_settings),
 ) -> ValidationResult:
     state = repo_or_404(request, repository_id)
-    return PatchService(settings).validate(state, patch_id)
+    store = request.app.state.store
+    RepositoryService(settings, store).ensure_index(state)
+    result = PatchService(settings).validate(state, patch_id)
+    store.persist(state)
+    return result
 
 
 @router.get("/repositories/{repository_id}/patches/{patch_id}/download")

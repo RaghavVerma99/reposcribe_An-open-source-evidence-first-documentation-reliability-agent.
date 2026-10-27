@@ -13,7 +13,8 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1 \
     APP_ENV=production \
-    WORKSPACE_ROOT=/tmp/reposcribe-workspaces
+    WORKSPACE_ROOT=/tmp/reposcribe-workspaces \
+    REPOSCRIBE_DB_PATH=/tmp/reposcribe/state.db
 
 WORKDIR /app
 

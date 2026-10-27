@@ -1,4 +1,4 @@
-"""In-memory repository and session registry with workspace lifecycle."""
+"""Repository registry: an in-memory cache over a durable SQLite mirror."""
 
 from __future__ import annotations
 
@@ -58,12 +58,28 @@ class RepositoryState:
 
 class Store:
     def __init__(self, settings: Settings) -> None:
+        # Imported here to keep persistence.py able to import RepositoryState.
+        from app.services.persistence import StateDB
+
         self._settings = settings
-        self._repos: dict[str, RepositoryState] = {}
+        self._db = StateDB(settings.db_path)
+        self._repos: dict[str, RepositoryState] = self._db.load_all()
         # Workspaces being built but not yet registered. Counting them closes
         # the race between two concurrent uploads both passing the check.
         self._pending = 0
         self._lock = threading.RLock()
+
+    def persist(self, state: RepositoryState) -> None:
+        """Write the repository, its findings, audits, and patches to disk."""
+        self._db.persist(state)
+
+    def ids(self) -> set[str]:
+        with self._lock:
+            return set(self._repos)
+
+    def all(self) -> list[RepositoryState]:
+        with self._lock:
+            return list(self._repos.values())
 
     def reserve(self) -> None:
         """Claim a slot before copying or extracting a workspace."""
@@ -87,6 +103,7 @@ class Store:
             state.last_accessed_at = utcnow()
             self._repos[state.id] = state
             self._pending = max(0, self._pending - 1)
+        self._db.persist(state)
 
     def get(self, repository_id: str, session_id: str | None = None) -> RepositoryState | None:
         # The sweep takes its own short lock section, so a slow directory
@@ -99,6 +116,7 @@ class Store:
             if session_id is not None and state.session_id != session_id:
                 return None
             state.last_accessed_at = utcnow()
+            self._db.touch(state.id, state.last_accessed_at)
             return state
 
     def remove(self, repository_id: str) -> bool:
@@ -106,6 +124,7 @@ class Store:
             state = self._repos.pop(repository_id, None)
         if state is None:
             return False
+        self._db.delete(repository_id)
         shutil.rmtree(state.workspace, ignore_errors=True)
         return True
 
@@ -127,26 +146,27 @@ class Store:
             states = [self._repos.pop(key) for key in expired_ids]
         removed = 0
         for state in states:
+            self._db.delete(state.id)
             if shutil.rmtree(state.workspace, ignore_errors=True) is None:
                 removed += 1
         return removed
 
 
-def sweep_orphan_workspaces(settings) -> list[str]:
-    """Remove workspace directories that no registered repository owns.
+def sweep_orphan_workspaces(settings, keep: set[str] | None = None) -> list[str]:
+    """Remove workspace directories that no persisted repository owns.
 
-    Session state lives in memory, so after a crash or restart every directory
-    on disk belongs to nobody. Left alone they leak irrecoverably, because the
-    TTL sweep only knows about registered sessions. Multi-worker deployments
-    are not supported until state becomes external (Phase 5): one worker would
-    delete another's live workspaces here.
+    ``keep`` is the set of repository ids restored from the database. A known
+    workspace survives a restart; only directories with no durable owner are
+    removed. Multi-worker deployments remain unsupported: one worker would
+    sweep another worker's live directories.
     """
     root = Path(settings.workspace_root)
     if not root.is_dir():
         return []
+    owned = keep or set()
     removed: list[str] = []
     for entry in root.iterdir():
-        if not entry.is_dir():
+        if not entry.is_dir() or entry.name in owned:
             continue
         shutil.rmtree(entry, ignore_errors=True)
         removed.append(entry.name)
